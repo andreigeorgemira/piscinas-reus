@@ -66,7 +66,7 @@ Components) backed by Supabase. Four zones:
 | Marketing site | `/[locale]` | Public | Static / ISR |
 | Admin dashboard | `/[locale]/admin` | `admin` role | Dynamic, server-rendered |
 | Client portal | `/[locale]/portal` | `client` role | Dynamic, server-rendered |
-| Public quote link | `/q/[token]` | Anonymous, token-bearing | Dynamic |
+| Public quote link | `/public-view/[token]` | Anonymous, token-bearing | Dynamic |
 
 Rationale for one app instead of two: the marketing site and the dashboard
 share the design system, the Supabase client, the i18n setup and the
@@ -92,7 +92,8 @@ src/
       (marketing)/          # landing, services, gallery, faq, contact
       admin/                # dashboard
       portal/               # client portal
-    q/[token]/              # public quote view
+    public-view/[token]/    # public quote view (one dynamic segment,
+                            # not a directory per quote)
     api/
   components/
     ui/                     # design system primitives
@@ -379,7 +380,7 @@ Three rules that must not be got wrong:
    both the Supabase `authenticated` role, so a per-column grant would hide
    cost from staff too. `internal_notes`, `clients.notes` and the whole price
    book are withheld by the same view-shaped pattern.
-3. **Token access is anonymous but narrow.** `/q/[token]` calls a single
+3. **Token access is anonymous but narrow.** `/public-view/[token]` calls a single
    `security definer` function, `get_quote_by_token(p_token text)`, which
    returns the quote and its client-safe lines only when the token matches
    exactly and the status is not `draft`. The anonymous role gets no direct
@@ -452,8 +453,24 @@ which language the enquiry came in, so replies match.
 
 ## 11. PDF
 
-Rendered server-side by `@react-pdf/renderer` in a route handler, from the
-same totals logic as the screen. The document contains: company header and
+### Storage
+
+Nothing is stored. Vercel has no persistent filesystem, and a saved PDF would
+eventually contradict the rows it came from. The document is rendered on every
+request, server-side by `@react-pdf/renderer` in a route handler, from the
+same totals logic as the screen.
+
+That creates one hazard: a quote edited after it was sent would silently show
+the client a different price through the same link. So **a quote is immutable
+once `status = 'sent'`**. Line items reject writes in that state. To change a
+sent quote, an admin explicitly returns it to `draft`, which invalidates the
+link until it is sent again. This is enforced in the database, not the UI.
+
+Supabase Storage is used only for gallery photographs on the marketing site.
+
+### Content
+
+The document contains: company header and
 logo, quote reference and dates, client details, line items grouped by
 `group_name` with quantity, unit price and line total, the base total, then a
 clearly separated "Opciones recomendadas" block listing extras with their
