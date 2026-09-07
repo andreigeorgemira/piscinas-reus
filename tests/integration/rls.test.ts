@@ -95,10 +95,9 @@ beforeAll(async () => {
 afterAll(resetDatabase)
 
 describe('clients table', () => {
-  it('lets a client read only their own row', async () => {
-    const { data } = await clientA.from('clients').select('id')
-    expect(data).toHaveLength(1)
-    expect(data![0]!.id).toBe(clientAId)
+  it('gives a client no direct access to their own row', async () => {
+    const { data } = await clientA.from('clients').select('id').eq('id', clientAId)
+    expect(data).toEqual([])
   })
 
   it('hides client A from client B', async () => {
@@ -125,12 +124,22 @@ describe('clients table', () => {
     const { data } = await adminDb().from('clients').select('email').eq('id', clientAId).single()
     expect(data!.email).not.toBe('hijack@example.test')
   })
+
+  it('does not let a client select the notes column directly', async () => {
+    const { data } = await clientA.from('clients').select('notes').eq('id', clientAId)
+    expect(data).toEqual([])
+  })
+
+  it('lets an admin read the notes column', async () => {
+    const { data } = await adminDb().from('clients').select('notes').eq('id', clientAId).single()
+    expect(data).not.toBeNull()
+  })
 })
 
 describe('quotes table', () => {
-  it('shows a sent quote to its own client', async () => {
+  it('gives a client no direct access to a sent quote', async () => {
     const { data } = await clientA.from('quotes').select('id').eq('id', quoteAId)
-    expect(data).toHaveLength(1)
+    expect(data).toEqual([])
   })
 
   it('hides a draft quote from its own client', async () => {
@@ -147,6 +156,58 @@ describe('quotes table', () => {
     await clientA.from('quotes').update({ status: 'accepted' }).eq('id', quoteAId)
     const { data } = await adminDb().from('quotes').select('status').eq('id', quoteAId).single()
     expect(data!.status).toBe('sent')
+  })
+
+  it('does not let a client select internal_notes directly', async () => {
+    const { data } = await clientA.from('quotes').select('internal_notes').eq('id', quoteAId)
+    expect(data).toEqual([])
+  })
+
+  it('lets an admin read internal_notes from the base table', async () => {
+    const { data } = await staff
+      .from('quotes')
+      .select('internal_notes')
+      .eq('id', quoteAId)
+      .single()
+    expect(data!.internal_notes).toBe('margen bajo, no bajar mas')
+  })
+})
+
+describe('projects table', () => {
+  it('does not let a client select the notes column directly', async () => {
+    const { data } = await clientA.from('projects').select('notes')
+    expect(data).toEqual([])
+  })
+})
+
+describe('client_quotes view', () => {
+  it('shows a client their own sent quote without internal_notes', async () => {
+    const { data } = await clientA.from('client_quotes').select('*').eq('id', quoteAId)
+    expect(data).toHaveLength(1)
+    expect(data![0]).not.toHaveProperty('internal_notes')
+  })
+
+  it('does not show a client their own draft quote', async () => {
+    const { data } = await clientA.from('client_quotes').select('id').eq('id', draftAId)
+    expect(data).toEqual([])
+  })
+
+  it('hides client A quotes from client B', async () => {
+    const { data } = await clientB.from('client_quotes').select('id')
+    expect(data).toEqual([])
+  })
+})
+
+describe('client_profile view', () => {
+  it('shows a client their own profile without notes', async () => {
+    const { data } = await clientA.from('client_profile').select('*').eq('id', clientAId)
+    expect(data).toHaveLength(1)
+    expect(data![0]).not.toHaveProperty('notes')
+  })
+
+  it('hides client A from client B', async () => {
+    const { data } = await clientB.from('client_profile').select('id').eq('id', clientAId)
+    expect(data).toEqual([])
   })
 })
 
@@ -194,6 +255,26 @@ describe('leads table', () => {
   it('lets an admin read leads', async () => {
     const { data } = await staff.from('leads').select('id')
     expect(data!.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('rejects an anonymous submission that sets status directly', async () => {
+    const { error } = await anonDb().from('leads').insert({
+      full_name: 'Visitante',
+      email: uniqueEmail('visitor-discarded'),
+      message: 'Intento de saltarse la triage',
+      status: 'discarded',
+    })
+    expect(error).not.toBeNull()
+  })
+
+  it('rejects an anonymous submission that attributes itself to a client', async () => {
+    const { error } = await anonDb().from('leads').insert({
+      full_name: 'Visitante',
+      email: uniqueEmail('visitor-attributed'),
+      message: 'Intento de vincularse a un cliente existente',
+      client_id: clientAId,
+    })
+    expect(error).not.toBeNull()
   })
 })
 
