@@ -1,8 +1,39 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { adminDb, createUser, resetDatabase, uniqueEmail } from './helpers/db'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { LOCAL_ANON_KEY, LOCAL_URL, adminDb, createUser, resetDatabase, uniqueEmail } from './helpers/db'
 
 beforeAll(resetDatabase)
 afterAll(resetDatabase)
+
+/**
+ * Creates a confirmed auth user carrying attacker-supplied signup metadata
+ * and returns a client authenticated as them. Calls
+ * `admin.createUser({ user_metadata: ... })` directly rather than
+ * extending the shared `createUser()` helper, per the review finding: the
+ * helper's `(email, password)` signature is used unchanged by six other
+ * test files, and this metadata parameter is only ever needed here.
+ */
+async function createUserWithMetadata(
+  email: string,
+  metadata: Record<string, unknown>,
+): Promise<{ id: string; db: SupabaseClient }> {
+  const password = 'test-password-123'
+  const { data, error } = await adminDb().auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: metadata,
+  })
+  if (error) throw error
+
+  const db = createClient(LOCAL_URL, LOCAL_ANON_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+  const signIn = await db.auth.signInWithPassword({ email, password })
+  if (signIn.error) throw signIn.error
+
+  return { id: data.user!.id, db }
+}
 
 describe('account linking', () => {
   it('creates a profile with the client role', async () => {
@@ -92,8 +123,13 @@ describe('account linking', () => {
     })
     expect(error).toBeNull()
 
-    const { data: rows } = await adminDb().from('clients').select().eq('user_id', data!.user!.id)
-    expect(rows).toEqual([])
+    const { data: clientRows } = await adminDb().from('clients').select().eq('user_id', data!.user!.id)
+    expect(clientRows).toEqual([])
+
+    // The trigger's `if new.email_confirmed_at is null then return new`
+    // guard skips both inserts, not just the clients one.
+    const { data: profileRows } = await adminDb().from('profiles').select().eq('id', data!.user!.id)
+    expect(profileRows).toEqual([])
   })
 
   it('does not steal a client already linked to somebody else', async () => {
@@ -106,5 +142,39 @@ describe('account linking', () => {
     const { data: all } = await adminDb().from('clients').select().eq('email', email)
     expect(all).toHaveLength(1)
     expect(all![0]!.id).toBe(before!.id)
+  })
+
+  it('ignores an admin role claim in signup metadata', async () => {
+    // The classic compromise point for this trigger: if the role were ever
+    // read from raw_user_meta_data, this is exactly the payload an
+    // attacker would send to a public signup endpoint.
+    const email = uniqueEmail('attacker')
+    const { id, db } = await createUserWithMetadata(email, { role: 'admin' })
+
+    const { data: profile } = await adminDb().from('profiles').select().eq('id', id).single()
+    expect(profile!.role).toBe('client')
+
+    const { data: isAdmin } = await db.rpc('is_admin')
+    expect(isAdmin).toBe(false)
+  })
+
+  it('ignores a nested admin role claim while still honoring full_name', async () => {
+    // A second, differently-shaped payload, because a naive fix (e.g.
+    // guarding only a bare `role` key) might miss this one. full_name is
+    // asserted positively here: it proves the trigger genuinely read this
+    // metadata object, so 'client' is the trigger refusing a value it can
+    // see -- not the trigger failing to read metadata at all.
+    const email = uniqueEmail('attacker-named')
+    const { id, db } = await createUserWithMetadata(email, {
+      role: 'admin',
+      full_name: 'Atacante',
+    })
+
+    const { data: profile } = await adminDb().from('profiles').select().eq('id', id).single()
+    expect(profile!.role).toBe('client')
+    expect(profile!.full_name).toBe('Atacante')
+
+    const { data: isAdmin } = await db.rpc('is_admin')
+    expect(isAdmin).toBe(false)
   })
 })
