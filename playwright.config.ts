@@ -20,6 +20,14 @@ import {
 const PORT = 3100
 const BASE_URL = `http://127.0.0.1:${PORT}`
 
+/**
+ * Its own build directory, because `next dev` locks one per directory rather
+ * than per port: without this the suite refuses to start whenever the developer
+ * already has `npm run dev` running. See the comment in next.config.ts, which
+ * reads NEXT_DIST_DIR. Keep the value in .gitignore.
+ */
+const E2E_DIST_DIR = '.next-e2e'
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
@@ -39,12 +47,26 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: false,
     timeout: 120_000,
+    // This list has to stay exhaustive. It overrides rather than replaces -
+    // Playwright spawns the server with `{...process.env, ...env}`
+    // (node_modules/playwright/lib/runner/index.js, `launchProcess`) - so every
+    // variable not named here still reaches the dev server from the developer's
+    // `.env.local`, which points at the hosted project and at real third-party
+    // services. A variable that would reach a live service has to be
+    // neutralised here explicitly, even when it is empty today: the run that
+    // breaks the rule is the one after somebody fills it in. Adding an
+    // integration means adding its variables here in the same commit.
     env: {
       PORT: String(PORT),
+      NEXT_DIST_DIR: E2E_DIST_DIR,
       NEXT_PUBLIC_SUPABASE_URL: LOCAL_URL,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: LOCAL_ANON_KEY,
       SUPABASE_SERVICE_ROLE_KEY: LOCAL_SERVICE_KEY,
       NEXT_PUBLIC_SITE_URL: BASE_URL,
+      // Plan 5 wires Resend up. Blank so an e2e run cannot send real email on
+      // the developer's account.
+      RESEND_API_KEY: '',
+      RESEND_FROM_EMAIL: '',
     },
   },
 })

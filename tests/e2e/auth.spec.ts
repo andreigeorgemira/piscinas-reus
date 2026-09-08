@@ -96,12 +96,82 @@ test('refuses a dashboard destination for a client', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Mi área' })).toBeVisible()
 })
 
+// Spellings that are not literally "/admin" but land a browser on /admin all
+// the same. The refusal exists to stop the URL bar naming a page the visitor
+// is not being shown, so it has to survive being spelled around.
+const dashboardSpellings = ['/./admin', '/admin/', '/portal/../admin']
+
+test('refuses a dashboard destination spelled around for a client', async ({
+  page,
+}) => {
+  for (const next of dashboardSpellings) {
+    await page.context().clearCookies()
+    await page.goto(`/login?next=${encodeURIComponent(next)}`)
+    await submitLogin(page, clientEmail, password)
+
+    // An exact URL, not /portal/: the whole point is what the address bar
+    // says, and under the bug it said /admin while showing this same page.
+    await expect(page, `next=${next} was honoured`).toHaveURL('/portal')
+    await expect(page.getByRole('heading', { name: 'Mi área' })).toBeVisible()
+  }
+})
+
+test('refuses to land a signed-in user back on the sign-in form', async ({
+  page,
+}) => {
+  // An empty credential form shown *after* a successful sign-in is a link
+  // worth handing out: it farms a second password entry from someone who has
+  // every reason to think the first one failed.
+  await page.goto('/login?next=%2Flogin')
+  await submitLogin(page, staffEmail, password)
+
+  await expect(page).toHaveURL('/admin')
+  await expect(page.getByRole('heading', { name: 'Panel' })).toBeVisible()
+})
+
+test('carries the query string of the page the visitor was sent away from', async ({
+  page,
+}) => {
+  await page.goto('/portal?tab=items')
+  await expect(page).toHaveURL('/login?next=%2Fportal%3Ftab%3Ditems')
+
+  await submitLogin(page, clientEmail, password)
+  await expect(page).toHaveURL('/portal?tab=items')
+})
+
 const hostile = [
   'https://evil.example/',
   '//evil.example/',
   '/\\evil.example/',
   'evil.example',
 ]
+
+/** The value of the form's hidden `next` field, or null when there is none. */
+async function hiddenNext(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
+    const field = document.querySelector<HTMLInputElement>(
+      'form input[name="next"]',
+    )
+    return field ? field.value : null
+  })
+}
+
+test('keeps an off-site next out of the form it renders', async ({ page }) => {
+  // The action refuses these a moment later either way, so nothing here is the
+  // last line of defence. It is pinned because it is the difference between a
+  // hostile string never entering the DOM and it sitting there waiting for the
+  // next person to read the field back for some other purpose.
+
+  // Positive control first: without it, deleting the field entirely would
+  // satisfy every assertion in the loop.
+  await page.goto('/login?next=%2Fportal')
+  expect(await hiddenNext(page)).toBe('/portal')
+
+  for (const next of hostile) {
+    await page.goto(`/login?next=${encodeURIComponent(next)}`)
+    expect(await hiddenNext(page), `next=${next} reached the DOM`).toBeNull()
+  }
+})
 
 test('ignores an off-site next parameter in the URL', async ({ page, baseURL }) => {
   for (const next of hostile) {

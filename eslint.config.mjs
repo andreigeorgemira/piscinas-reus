@@ -9,6 +9,11 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    // Playwright's dev server builds here rather than into .next, so it gets
+    // its own `next dev` lock (see next.config.ts). ".next/**" does not cover
+    // a sibling directory, and without this entry `npm run lint` reports
+    // hundreds of errors in generated code after any e2e run.
+    ".next-e2e/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

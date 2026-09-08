@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { isAdminPath, isLoginPath } from '@/lib/routes'
 import { safeNextPath } from '@/lib/safe-next-path'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
@@ -44,18 +45,26 @@ export async function signIn(
   const isAdmin = profile?.role === 'admin'
   const landing = isAdmin ? '/admin' : '/portal'
 
-  // A client can put ?next=/admin in the URL themselves. The route guard does
-  // stop them - it serves the portal instead - but only after the browser has
-  // committed to the /admin address, so the URL bar ends up lying about the
-  // page on screen. Refuse the destination here as well. The prefix test
-  // mirrors the guard's own in src/lib/supabase/middleware.ts.
-  const destination =
-    requested !== null && (isAdmin || !requested.startsWith('/admin'))
-      ? requested
-      : landing
+  // Two destinations are same-site and still wrong, so safeNextPath - which
+  // only answers "is this the same site" - lets both through and they are
+  // refused here instead.
+  //
+  // /admin for a non-admin: the route guard does stop them, it serves the
+  // portal, but only after the browser has committed to the /admin address, so
+  // the URL bar ends up naming a page they are not being shown. isAdminPath
+  // normalises first, because `'/./admin'.startsWith('/admin')` is false and a
+  // browser sent there lands on /admin all the same.
+  //
+  // /login for anyone: an empty credential form rendered straight after a
+  // successful sign-in is a link worth handing out - it farms a second
+  // password entry from someone with every reason to think the first failed.
+  const usable =
+    requested !== null &&
+    !isLoginPath(requested) &&
+    (isAdmin || !isAdminPath(requested))
 
   revalidatePath('/', 'layout')
-  redirect(destination)
+  redirect(usable ? requested : landing)
 }
 
 export async function signOut(): Promise<void> {

@@ -17,6 +17,10 @@ coverage/
 
 # next.js
 .next/
+# The trailing slash in `.next/` does not cover this: it is a sibling
+# directory, not a child. Playwright's dev server builds here so it does not
+# fight the developer's server for the per-directory `next dev` lock.
+.next-e2e/
 out/
 build/
 next-env.d.ts

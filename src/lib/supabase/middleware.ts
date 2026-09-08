@@ -1,9 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getPublicEnv } from '@/lib/env'
-
-const ADMIN_PREFIX = '/admin'
-const PORTAL_PREFIX = '/portal'
+import { isAdminPath, isProtectedPath } from '@/lib/routes'
 
 /**
  * Redirects while keeping whatever cookies the Supabase client has already
@@ -51,16 +49,21 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   } = await supabase.auth.getUser()
 
   const path = request.nextUrl.pathname
-  const isProtected = path.startsWith(ADMIN_PREFIX) || path.startsWith(PORTAL_PREFIX)
 
-  if (isProtected && !user) {
+  if (isProtectedPath(path) && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    url.searchParams.set('next', path)
+    // The query string travels inside `next`, not beside it. A deep link is
+    // usually a deep link *with* its query - /portal/quotes/42?tab=items - and
+    // dropping it sends the visitor to a different page than the one they
+    // asked for. Clearing `search` first stops the original parameters from
+    // also being copied onto /login, where they mean nothing.
+    url.search = ''
+    url.searchParams.set('next', path + request.nextUrl.search)
     return redirectCarryingCookies(url, response)
   }
 
-  if (path.startsWith(ADMIN_PREFIX) && user) {
+  if (isAdminPath(path) && user) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
