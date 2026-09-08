@@ -5,6 +5,24 @@ import { getPublicEnv } from '@/lib/env'
 const ADMIN_PREFIX = '/admin'
 const PORTAL_PREFIX = '/portal'
 
+/**
+ * Redirects while keeping whatever cookies the Supabase client has already
+ * written to `carrying`.
+ *
+ * getUser() can rotate the refresh token, and setAll() writes the new pair
+ * onto the response built here in the middleware. A bare
+ * NextResponse.redirect() is a fresh response that carries none of them, so
+ * the rotated token would never reach the browser while the old one is
+ * already spent server-side - signing the user out on their next request.
+ */
+function redirectCarryingCookies(url: URL, carrying: NextResponse): NextResponse {
+  const redirect = NextResponse.redirect(url)
+  for (const cookie of carrying.cookies.getAll()) {
+    redirect.cookies.set(cookie)
+  }
+  return redirect
+}
+
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
   let response = NextResponse.next({ request })
   const env = getPublicEnv()
@@ -39,7 +57,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('next', path)
-    return NextResponse.redirect(url)
+    return redirectCarryingCookies(url, response)
   }
 
   if (path.startsWith(ADMIN_PREFIX) && user) {
@@ -53,7 +71,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
       const url = request.nextUrl.clone()
       url.pathname = '/portal'
       url.search = ''
-      return NextResponse.redirect(url)
+      return redirectCarryingCookies(url, response)
     }
   }
 
