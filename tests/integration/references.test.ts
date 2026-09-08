@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { adminDb, createUser, makeAdmin, resetDatabase, uniqueEmail } from './helpers/db'
+import { adminDb, anonDb, createUser, makeAdmin, resetDatabase, uniqueEmail } from './helpers/db'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 let staff: SupabaseClient
@@ -50,21 +50,47 @@ describe('next_reference', () => {
     expect(new Set(values).size).toBe(25)
   })
 
-  it('rejects an anonymous caller', async () => {
-    // Note: this does not exercise a grant-layer ("permission denied for
-    // function") rejection. Supabase's default privileges grant EXECUTE on
-    // every public-schema function directly to anon/authenticated/
-    // service_role at creation time; `revoke all ... from public` in the
-    // migration only revokes the PUBLIC pseudo-role's grant, which those
-    // per-role default grants never went through, so it does not remove
-    // them. In practice this anonymous call is refused by the same
-    // is_admin() check inside next_reference as every other non-admin
-    // caller - see the test below for the assertion that pins that down.
-    const { createClient } = await import('@supabase/supabase-js')
-    const { LOCAL_URL, LOCAL_ANON_KEY } = await import('./helpers/db')
-    const anon = createClient(LOCAL_URL, LOCAL_ANON_KEY)
-    const { error } = await anon.rpc('next_reference', { p_prefix: 'Q' })
-    expect(error).not.toBeNull()
+  it('rejects an anonymous caller at the grant layer', async () => {
+    // 0007_function_grants.sql closes the gap described in
+    // task-8-report.md ("Fix round 1"/"Fix round 2"): Supabase's default
+    // privileges grant EXECUTE on every public-schema function directly to
+    // anon/authenticated/service_role at creation time, so the earlier
+    // `revoke all ... from public` in 0006_references.sql never actually
+    // removed anon's EXECUTE grant on next_reference - it only removed the
+    // (here, nonexistent) PUBLIC grant. Before 0007, this anonymous call
+    // was refused by the is_admin() check inside next_reference, same as
+    // any other non-admin; now it never reaches the function body at all.
+    //
+    // Probed directly against PostgREST rather than assumed: after 0007,
+    // an anonymous RPC call gets Postgres's own "permission denied for
+    // function" error (still SQLSTATE 42501, but a different message than
+    // the is_admin() check raises), which is what pins this down as a
+    // grant-layer rejection rather than the runtime check.
+    const year = new Date().getFullYear()
+
+    const before = await adminDb()
+      .from('reference_counters')
+      .select('last_value')
+      .eq('prefix', 'ANONGRANT')
+      .eq('year', year)
+      .maybeSingle()
+
+    const { data, error } = await anonDb().rpc('next_reference', { p_prefix: 'ANONGRANT' })
+
+    expect(data).toBeNull()
+    expect(error?.code).toBe('42501')
+    expect(error?.message).toBe('permission denied for function next_reference')
+
+    const after = await adminDb()
+      .from('reference_counters')
+      .select('last_value')
+      .eq('prefix', 'ANONGRANT')
+      .eq('year', year)
+      .maybeSingle()
+
+    // Never got far enough to touch the counter.
+    expect(after.data).toBeNull()
+    expect(after.data?.last_value).toBe(before.data?.last_value)
   })
 
   it('rejects a signed-in non-admin without advancing the counter', async () => {
