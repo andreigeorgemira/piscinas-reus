@@ -71,7 +71,11 @@ export async function resetDatabase(): Promise<void> {
   // deleting their items below would otherwise be refused by that trigger.
   // Reopening every quote first clears it for cleanup; this runs before any
   // table is deleted, so it never races the per-table deletes that follow.
-  await admin.from('quotes').update({ status: 'draft' }).gte('created_at', '1900-01-01')
+  const { error: reopenError } = await admin
+    .from('quotes')
+    .update({ status: 'draft' })
+    .gte('created_at', '1900-01-01')
+  if (reopenError) throw reopenError
 
   for (const table of [
     'quote_items',
