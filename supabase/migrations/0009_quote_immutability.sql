@@ -31,6 +31,18 @@
 -- caller, and null used to mean "allow". It no longer does; see below. The
 -- pinned search_path stops a caller from shadowing public.quotes with a
 -- table of their own and lying about its status.
+--
+-- The definer half of that is not covered by a test and cannot be until a
+-- non-admin write path onto quote_items exists (the planned
+-- set_quote_extra). Strip `security definer` today and the suite stays
+-- green. The null-parent half below IS covered - see "refuses a line whose
+-- parent quote does not exist" in tests/integration/immutability.test.ts.
+--
+-- This file was amended in place after it had already been applied locally
+-- (it had never reached the hosted project). `supabase migration up` will
+-- not replay an applied migration, so a database created before that
+-- amendment keeps the old, weaker function and still passes the suite. Run
+-- `npx supabase db reset` if yours predates it.
 create or replace function public.guard_quote_item_edit()
 returns trigger
 language plpgsql
@@ -50,9 +62,14 @@ begin
     -- cascade fires this BEFORE DELETE trigger after the parent row is
     -- already gone from public.quotes in the same command, so the lookup
     -- above finds nothing. Deleting a whole quote is deliberately legal
-    -- even once sent - the client's access token dies with it, so there is
-    -- no silent price change left for a client to see - so this permits
-    -- it, the same as an ordinary draft-quote delete.
+    -- even once sent: it destroys the record rather than silently altering
+    -- the figure under a client who is looking at it, which is what this
+    -- guard exists to stop. It does not retire the access token, only frees
+    -- it - quotes.access_token carries a unique constraint and nothing
+    -- more, so a later quote could reuse the same token and a link already
+    -- in a client's hands would then resolve to different numbers. That is
+    -- a concern for whoever builds quote deletion in the admin UI, not for
+    -- this trigger.
     if v_status is null or v_status = 'draft' then
       return old;
     end if;
@@ -66,6 +83,12 @@ begin
   -- "not visible to me" now that this function runs security definer - it
   -- means the referenced quote genuinely does not exist, and must raise
   -- rather than fall through to the draft-quote fast path below.
+  --
+  -- Side effect worth knowing: an orphan insert used to surface as the
+  -- foreign key's own 23503 (PostgREST renders that as HTTP 409). This
+  -- BEFORE trigger runs ahead of the FK check, so it now surfaces as P0001
+  -- (HTTP 400). Nothing consumes the distinction today, but admin-UI code
+  -- that special-cases foreign-key violations will not see one here.
   select status into v_status from public.quotes where id = new.quote_id;
   if v_status is null then
     raise exception 'Quote % does not exist.', new.quote_id using errcode = 'P0001';
