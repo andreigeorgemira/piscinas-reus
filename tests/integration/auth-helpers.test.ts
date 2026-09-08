@@ -12,11 +12,9 @@ describe('authorization helpers', () => {
   })
 
   it('reports true once the profile role is admin', async () => {
+    // The account-linking trigger (migration 0008) creates the profiles
+    // row automatically once the email is confirmed.
     const { id, db } = await createUser(uniqueEmail('boss'))
-    // The trigger that creates a profiles row on signup does not exist until
-    // Task 9, so the row is inserted here rather than assumed to exist.
-    const { error } = await adminDb().from('profiles').insert({ id })
-    if (error) throw error
     await makeAdmin(id)
     const { data } = await db.rpc('is_admin')
     expect(data).toBe(true)
@@ -32,8 +30,6 @@ describe('authorization helpers', () => {
     // single-caller tests above; this only passes if is_admin actually
     // distinguishes the two callers.
     const admin = await createUser(uniqueEmail('boss2'))
-    const { error } = await adminDb().from('profiles').insert({ id: admin.id })
-    if (error) throw error
     await makeAdmin(admin.id)
 
     const plain = await createUser(uniqueEmail('plain2'))
@@ -55,13 +51,12 @@ describe('authorization helpers', () => {
 
   it('resolves the caller\'s own client id when one is linked', async () => {
     const { id: userId, db } = await createUser(uniqueEmail('linked'))
-    // The trigger that links a clients row to auth.users on signup does not
-    // exist until Task 9, so the link is arranged directly here, the same
-    // way the admin test arranges the profiles row above.
+    // The account-linking trigger (migration 0008) creates the clients row
+    // automatically once the email is confirmed.
     const { data: client, error } = await adminDb()
       .from('clients')
-      .insert({ user_id: userId, email: uniqueEmail('linked-client'), full_name: 'Linked Client' })
       .select('id')
+      .eq('user_id', userId)
       .single()
     if (error) throw error
 

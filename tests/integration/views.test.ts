@@ -17,21 +17,14 @@ beforeAll(async () => {
   await resetDatabase()
   const db = adminDb()
 
+  // The account-linking trigger (migration 0008) creates the profiles and
+  // clients rows automatically once each account's email is confirmed.
   const boss = await createUser(uniqueEmail('staff'))
-  // The trigger that creates a profiles row on signup does not exist until
-  // Task 9 (see tests/integration/auth-helpers.test.ts), so the row is
-  // inserted here rather than assumed to exist.
-  await db.from('profiles').insert({ id: boss.id })
   await makeAdmin(boss.id)
   staff = boss.db
 
   const person = await createUser(uniqueEmail('client'))
   client = person.db
-  // Same workaround: the signup trigger that links auth.users to clients
-  // does not exist until Task 9, so the row is created directly.
-  await db
-    .from('clients')
-    .insert({ user_id: person.id, email: uniqueEmail('client-row'), full_name: 'Cliente' })
   const { data: row } = await db.from('clients').select().eq('user_id', person.id).single()
 
   const { data: project } = await db
@@ -95,9 +88,6 @@ beforeAll(async () => {
   // ownership filter actually compares the right column.
   const otherPerson = await createUser(uniqueEmail('other'))
   otherClient = otherPerson.db
-  await db
-    .from('clients')
-    .insert({ user_id: otherPerson.id, email: uniqueEmail('other-row'), full_name: 'Otro cliente' })
   const { data: otherRow } = await db.from('clients').select().eq('user_id', otherPerson.id).single()
 
   const { data: otherProject } = await db
@@ -147,9 +137,6 @@ beforeAll(async () => {
   // item counts and totals for A and B are undisturbed.
   const roundingPerson = await createUser(uniqueEmail('rounding'))
   roundingClient = roundingPerson.db
-  await db
-    .from('clients')
-    .insert({ user_id: roundingPerson.id, email: uniqueEmail('rounding-row'), full_name: 'Cliente redondeo' })
   const { data: roundingRow } = await db
     .from('clients')
     .select()

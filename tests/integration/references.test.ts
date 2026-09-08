@@ -7,11 +7,9 @@ let staff: SupabaseClient
 beforeAll(async () => {
   await resetDatabase()
   await adminDb().from('reference_counters').delete().gte('year', 0)
+  // The account-linking trigger (migration 0008) creates the profiles row
+  // automatically once the email is confirmed.
   const boss = await createUser(uniqueEmail('staff'))
-  // The trigger that creates a profiles row on signup does not exist until
-  // Task 9 (see tests/integration/auth-helpers.test.ts), so the row is
-  // inserted here rather than assumed to exist.
-  await adminDb().from('profiles').insert({ id: boss.id })
   await makeAdmin(boss.id)
   staff = boss.db
 })
@@ -95,11 +93,10 @@ describe('next_reference', () => {
 
   it('rejects a signed-in non-admin without advancing the counter', async () => {
     const year = new Date().getFullYear()
+    // The account-linking trigger creates the profiles row automatically
+    // (see the beforeAll comment). No makeAdmin() call here - this user
+    // must stay a non-admin.
     const customer = await createUser(uniqueEmail('customer'))
-    // See the beforeAll comment: the signup trigger doesn't exist until
-    // Task 9, so the profiles row is inserted manually. No makeAdmin() call
-    // here - this user must stay a non-admin.
-    await adminDb().from('profiles').insert({ id: customer.id })
 
     const before = await adminDb()
       .from('reference_counters')

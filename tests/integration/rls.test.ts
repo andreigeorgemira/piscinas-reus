@@ -21,11 +21,9 @@ beforeAll(async () => {
   await resetDatabase()
   const db = adminDb()
 
+  // The account-linking trigger (migration 0008) creates the profiles and
+  // clients rows automatically once each account's email is confirmed.
   const boss = await createUser(uniqueEmail('staff'))
-  // The trigger that creates a profiles row on signup does not exist until
-  // Task 9 (see tests/integration/auth-helpers.test.ts), so the row is
-  // inserted here rather than assumed to exist.
-  await db.from('profiles').insert({ id: boss.id })
   await makeAdmin(boss.id)
   staff = boss.db
 
@@ -33,16 +31,6 @@ beforeAll(async () => {
   const b = await createUser(uniqueEmail('clientb'))
   clientA = a.db
   clientB = b.db
-
-  // Same workaround: the signup trigger that links auth.users to profiles and
-  // clients does not exist until Task 9, so both rows are created directly.
-  await db.from('profiles').insert({ id: a.id })
-  await db
-    .from('clients')
-    .insert({ user_id: a.id, email: uniqueEmail('clienta-row'), full_name: 'Cliente A' })
-  await db
-    .from('clients')
-    .insert({ user_id: b.id, email: uniqueEmail('clientb-row'), full_name: 'Cliente B' })
 
   const { data: rowA } = await db.from('clients').select().eq('user_id', a.id).single()
   const { data: rowB } = await db.from('clients').select().eq('user_id', b.id).single()
