@@ -65,6 +65,14 @@ export async function makeAdmin(userId: string): Promise<void> {
 /** Deletes every row created by tests, in foreign-key-safe order. */
 export async function resetDatabase(): Promise<void> {
   const admin = adminDb()
+
+  // Migration 0009 freezes quote_items once its quote leaves 'draft'. Test
+  // fixtures deliberately leave quotes in 'sent' (and similar) status, so
+  // deleting their items below would otherwise be refused by that trigger.
+  // Reopening every quote first clears it for cleanup; this runs before any
+  // table is deleted, so it never races the per-table deletes that follow.
+  await admin.from('quotes').update({ status: 'draft' }).gte('created_at', '1900-01-01')
+
   for (const table of [
     'quote_items',
     'quotes',
