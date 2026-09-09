@@ -29,7 +29,7 @@ const MAX_MONEY = 9_999_999.99
  */
 function moneyField(label: string) {
   return z
-    .string()
+    .string({ error: `El ${label} es obligatorio.` })
     .transform((raw, ctx) => {
       const parsed = parseDecimal(raw)
       if (parsed === null) {
@@ -67,11 +67,15 @@ function optionalText(maxLength: number, message: string) {
 
 export const groupInputSchema = z.object({
   name: z
-    .string()
+    .string({ error: 'El nombre del grupo es obligatorio.' })
     .trim()
     .min(1, 'El nombre del grupo es obligatorio.')
     .max(80, 'El nombre del grupo no puede superar los 80 caracteres.'),
-  position: z.coerce.number().int().min(0).max(9999),
+  position: z.coerce
+    .number({ error: 'La posición no es válida.' })
+    .int('La posición debe ser un número entero.')
+    .min(0, 'La posición no puede ser negativa.')
+    .max(9999, 'La posición es demasiado grande.'),
 })
 
 export const itemInputSchema = z.object({
@@ -80,7 +84,7 @@ export const itemInputSchema = z.object({
     .transform((v) => (v === '' ? null : v)),
   code: optionalText(40, 'El código no puede superar los 40 caracteres.').nullable(),
   name: z
-    .string()
+    .string({ error: 'El nombre es obligatorio.' })
     .trim()
     .min(1, 'El nombre es obligatorio.')
     .max(200, 'El nombre no puede superar los 200 caracteres.'),

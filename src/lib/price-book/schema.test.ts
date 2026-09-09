@@ -73,6 +73,22 @@ describe('groupInputSchema', () => {
     const result = groupInputSchema.parse({ name: 'Obra civil', position: '' })
     expect(result.position).toBe(0)
   })
+
+  it('rejects a missing name with a Spanish message, not zod\'s English default', () => {
+    const result = groupInputSchema.safeParse({ name: null, position: 0 })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(firstIssue(result.error)).toBe('El nombre del grupo es obligatorio.')
+    }
+  })
+
+  it('rejects a non-numeric position with a Spanish message, not zod\'s English default', () => {
+    const result = groupInputSchema.safeParse({ name: 'Obra civil', position: 'abc' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(firstIssue(result.error)).toBe('La posición no es válida.')
+    }
+  })
 })
 
 describe('itemInputSchema', () => {
@@ -167,6 +183,40 @@ describe('itemInputSchema', () => {
       isActive: false,
     })
     expect(result.success).toBe(false)
+  })
+
+  it('rejects a missing name with a Spanish message, not zod\'s English default', () => {
+    const result = itemInputSchema.safeParse({
+      groupId: null,
+      code: null,
+      name: null,
+      description: null,
+      unit: 'unit',
+      unitCost: '0',
+      unitPrice: '0',
+      isActive: false,
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(firstIssue(result.error)).toBe('El nombre es obligatorio.')
+    }
+  })
+
+  it('rejects a missing price with a Spanish message, not zod\'s English default', () => {
+    const result = itemInputSchema.safeParse({
+      groupId: null,
+      code: null,
+      name: 'Vaso de gresite',
+      description: null,
+      unit: 'unit',
+      unitCost: '0',
+      unitPrice: null,
+      isActive: false,
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(firstIssue(result.error)).toBe('El precio es obligatorio.')
+    }
   })
 
   it('rejects a unit outside the enum', () => {
