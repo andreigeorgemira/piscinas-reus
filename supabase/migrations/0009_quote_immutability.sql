@@ -2,20 +2,12 @@
 -- frozen, so the figure the client is looking at cannot change underneath
 -- them. Returning the quote to draft reopens it and invalidates the link.
 --
--- Two changes are permitted despite the freeze. client_selected, and only on
--- a recommended line while the quote is sent (docs/superpowers/specs/
+-- The one permitted change is client_selected, and only on a recommended
+-- line while the quote is sent (docs/superpowers/specs/
 -- 2026-09-07-piscinas-reus-design.md:394-395): that is the client ticking a
 -- recommended extra, which is the whole point of the sent state. Comparing
 -- the rows as jsonb minus that key is exact, and stays correct when columns
--- are added later. And price_book_item_id turning from an id into null,
--- with nothing else on the row changing: that is the `on delete set null`
--- action on quote_items.price_book_item_id firing when a catalogue item is
--- deleted (0001_core_schema.sql). It only loosens the pointer back to the
--- catalogue; every descriptive and monetary field the client has already
--- seen is a snapshot on this row already (see the comment on quote_items in
--- 0001_core_schema.sql) and stays exactly as it was, so this one is safe
--- regardless of status -- draft, sent, accepted or rejected alike -- unlike
--- every other change this guard exists to stop.
+-- are added later.
 --
 -- quote_items has no updated_at column and carries no other row trigger
 -- today, so this whole-row jsonb comparison has no firing-order hazard. If
@@ -139,22 +131,6 @@ begin
      and v_status = 'sent'
      and old.is_recommended
      and (to_jsonb(new) - 'client_selected') = (to_jsonb(old) - 'client_selected')
-  then
-    return new;
-  end if;
-
-  -- The second permitted change, at any non-draft status: a catalogue item
-  -- being deleted unlinks this line's price_book_item_id via `on delete set
-  -- null` and touches nothing else. Without this carve-out that cascading
-  -- UPDATE would hit this guard and raise, and the delete would fail
-  -- outright -- a catalogue item ever copied onto a non-draft quote would
-  -- become permanently undeletable, leaving retiring as the only option,
-  -- which is not what "delete" is supposed to mean (see the comment on
-  -- deleteItem in src/app/admin/price-book/actions.ts).
-  if tg_op = 'UPDATE'
-     and old.price_book_item_id is not null
-     and new.price_book_item_id is null
-     and (to_jsonb(new) - 'price_book_item_id') = (to_jsonb(old) - 'price_book_item_id')
   then
     return new;
   end if;
