@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import type { PostgrestError } from '@supabase/supabase-js'
 import { requireAdmin } from '@/lib/auth/require-admin'
+import { idleState, type ActionState } from './action-state'
 import {
   firstIssue,
   groupInputFromForm,
@@ -12,9 +13,10 @@ import {
   itemInputToRow,
 } from '@/lib/price-book/schema'
 
-export type ActionState = { error: string | null }
-
-export const idleState: ActionState = { error: null }
+// Re-exported so callers still read the contract off this module. Only the
+// type: a value re-export would be a runtime export of a 'use server' file,
+// which is exactly what ./action-state exists to avoid.
+export type { ActionState }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

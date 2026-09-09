@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { signOut } from '@/app/auth/actions'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
@@ -18,6 +19,11 @@ export default async function AdminHomePage() {
         </form>
       </div>
       <p className="text-sm text-slate-600">Sesión iniciada como {user?.email}</p>
+      <nav>
+        <Link href="/admin/price-book" className="text-sm underline">
+          Tarifario
+        </Link>
+      </nav>
     </main>
   )
 }
