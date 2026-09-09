@@ -126,3 +126,31 @@ describe('listPriceBook', () => {
     expect(groups).toEqual([])
   })
 })
+
+describe('listPriceBook ungrouped bucket', () => {
+  it('is omitted entirely when nothing is ungrouped', async () => {
+    // The shared fixture above always has one ungrouped item ('Suelto'), so
+    // every assertion so far only ever exercises the guard's true branch -
+    // deleting `if (ungroupedItems.length > 0)` in queries.ts would not
+    // fail a single test without this one. Reassigning the ungrouped rows
+    // into the known fixture group (rather than resetting the database)
+    // proves the false branch without disturbing `staff`, `customer` or
+    // `groupId`, which later blocks in this file depend on.
+    const db = adminDb()
+    const { data: ungroupedRows } = await db
+      .from('price_book_items')
+      .select('id')
+      .is('group_id', null)
+
+    await db.from('price_book_items').update({ group_id: groupId }).is('group_id', null)
+
+    try {
+      const groups = await listPriceBook(staff)
+      expect(groups.map((g) => g.name)).not.toContain(UNGROUPED_NAME)
+    } finally {
+      for (const row of ungroupedRows ?? []) {
+        await db.from('price_book_items').update({ group_id: null }).eq('id', row.id)
+      }
+    }
+  })
+})
