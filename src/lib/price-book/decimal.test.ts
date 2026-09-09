@@ -43,6 +43,21 @@ describe('parseDecimal', () => {
     expect(parseDecimal('abc')).toBeNull()
   })
 
+  it('rejects a number with trailing garbage instead of partially matching it', () => {
+    // Proves the validation regex is anchored (^...$), not just matched somewhere in
+    // the string -- an unanchored pattern would find '48' inside '48abc' and accept it.
+    expect(parseDecimal('48abc')).toBeNull()
+  })
+
+  it('rejects a euro sign anywhere other than trailing', () => {
+    // Only a TRAILING '€' (see the ' 48,00 € ' case above) is stripped as a pasted-in
+    // currency symbol. A euro sign in any other position -- leading, or embedded
+    // between digits -- is not a formatting quirk to sanitise away; it is malformed
+    // input and must be rejected, not silently dropped from the middle of the number.
+    expect(parseDecimal('€48,00')).toBeNull()
+    expect(parseDecimal('4€8,00')).toBeNull()
+  })
+
   it('rejects a second comma even though replace() only swaps the first one', () => {
     // String.prototype.replace(',', '.') replaces only the first occurrence, so a
     // naive normalisation of '48,00,00' would produce '48.00,00' and silently look

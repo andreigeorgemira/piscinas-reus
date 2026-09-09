@@ -26,10 +26,13 @@ export function parseDecimal(raw: string): number | null {
     return null
   }
 
-  // The only currency symbol this form ever shows staff is the euro sign, and
-  // it can arrive pasted in from elsewhere. Strip it and re-trim; anything
-  // else that isn't a plausible number is rejected below, not sanitised.
-  const withoutCurrency = trimmed.replace(/€/g, '').trim()
+  // The only currency symbol this form ever shows staff is a trailing euro
+  // sign, which can arrive pasted in from elsewhere (e.g. ' 48,00 € '). Only
+  // that trailing position is stripped -- a stray '€' anywhere else (leading,
+  // or embedded between digits) is not a formatting quirk to sanitise away,
+  // it is a malformed input, and must fall through to the rejection below
+  // rather than being silently dropped.
+  const withoutCurrency = trimmed.replace(/\s*€\s*$/, '').trim()
   if (withoutCurrency === '') {
     return null
   }
