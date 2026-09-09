@@ -353,4 +353,84 @@ describe('deleting a price book item', () => {
     expect(survivor.unit_price).toBe(900)
     expect(survivor.price_book_item_id).toBeNull()
   })
+
+  // The carve-out in 0011_quote_item_unlink.sql only tolerates
+  // price_book_item_id turning null with nothing else on the row changing --
+  // this is the negative half proving that boundary is real. Without the
+  // jsonb-diff clause, an UPDATE that nulls price_book_item_id would pass
+  // the guard regardless of what else rides along in the same statement,
+  // exactly the price-smuggling hole immutability.test.ts's 'refuses a price
+  // change smuggled in together with a client_selected toggle on a sent
+  // quote' case already closes for the client_selected carve-out.
+  it('refuses a price change smuggled in together with the price_book_item_id unlink on a sent quote', async () => {
+    const db = adminDb()
+
+    const { data: client, error: clientError } = await db
+      .from('clients')
+      .insert({ email: uniqueEmail('provenance-smuggle'), full_name: 'Cliente Provenance Smuggle' })
+      .select()
+      .single()
+    if (clientError) throw clientError
+
+    const { data: item, error: itemError } = await db
+      .from('price_book_items')
+      .insert({
+        code: 'PROV-002',
+        name: 'Filtro de arena',
+        unit: 'unit',
+        unit_cost: 200,
+        unit_price: 350,
+        is_active: true,
+      })
+      .select()
+      .single()
+    if (itemError) throw itemError
+
+    const { data: quote, error: quoteError } = await db
+      .from('quotes')
+      .insert({
+        client_id: client!.id,
+        reference: 'Q-2026-9002',
+        title: 'Provenance smuggle',
+        access_token: 'token-provenance-smuggle',
+      })
+      .select()
+      .single()
+    if (quoteError) throw quoteError
+
+    const { data: line, error: lineError } = await db
+      .from('quote_items')
+      .insert({
+        quote_id: quote!.id,
+        price_book_item_id: item!.id,
+        name: item!.name,
+        unit: item!.unit,
+        unit_price: item!.unit_price,
+      })
+      .select()
+      .single()
+    if (lineError) throw lineError
+
+    const { error: sendError } = await db
+      .from('quotes')
+      .update({ status: 'sent' })
+      .eq('id', quote!.id)
+    if (sendError) throw sendError
+
+    const { error: smuggleError } = await staff
+      .from('quote_items')
+      .update({ price_book_item_id: null, unit_price: 1 })
+      .eq('id', line!.id)
+    expect(smuggleError).not.toBeNull()
+    expect(smuggleError!.code).toBe('P0001')
+
+    const { data: unchanged, error: unchangedError } = await db
+      .from('quote_items')
+      .select('unit_price, price_book_item_id')
+      .eq('id', line!.id)
+      .single()
+    if (unchangedError) throw unchangedError
+    expect(unchanged!.unit_price).toBe(350)
+    expect(unchanged!.price_book_item_id).toBe(item!.id)
+  })
 })

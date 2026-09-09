@@ -47,11 +47,19 @@
 -- to alter what the client has already seen.
 --
 -- Because this replaces the whole function body, the pre-existing
--- client_selected carve-out is restated verbatim below rather than lost.
--- Both are exercised by tests/integration/immutability.test.ts (the
--- 'still allows toggling the client extras selection' case pins
--- client_selected) and tests/integration/price-book.test.ts (the
--- 'deleting a price book item' block pins this one).
+-- client_selected carve-out is restated verbatim below rather than lost;
+-- tests/integration/immutability.test.ts still exercises it end to end,
+-- both the permissive case ('still allows toggling the client extras
+-- selection') and the smuggling case that pins the jsonb-diff boundary
+-- ('refuses a price change smuggled in together with a client_selected
+-- toggle on a sent quote'). This carve-out gets the same pair in
+-- tests/integration/price-book.test.ts, describe('deleting a price book
+-- item'): 'unlinks a sent quote's line but leaves its copied name and price
+-- untouched' for the permissive case, and 'refuses a price change smuggled
+-- in together with the price_book_item_id unlink on a sent quote' for the
+-- boundary -- deleting the jsonb-diff clause below makes that second test
+-- fail, the same way removing client_selected's own clause fails its
+-- counterpart in immutability.test.ts.
 --
 -- The trigger quote_items_guard_status (0009_quote_immutability.sql) binds
 -- to this function by name and does not need recreating; `create or
