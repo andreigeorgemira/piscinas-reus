@@ -62,7 +62,7 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_URL: LOCAL_URL,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: LOCAL_ANON_KEY,
       SUPABASE_SERVICE_ROLE_KEY: LOCAL_SERVICE_KEY,
-      NEXT_PUBLIC_SITE_URL: BASE_URL,
+      SITE_URL: BASE_URL,
       // Plan 5 wires Resend up. Blank so an e2e run cannot send real email on
       // the developer's account.
       RESEND_API_KEY: '',
