@@ -3,7 +3,14 @@
 import { revalidatePath } from 'next/cache'
 import type { PostgrestError } from '@supabase/supabase-js'
 import { requireAdmin } from '@/lib/auth/require-admin'
-import { firstIssue, groupInputFromForm, groupInputSchema } from '@/lib/price-book/schema'
+import {
+  firstIssue,
+  groupInputFromForm,
+  groupInputSchema,
+  itemInputFromForm,
+  itemInputSchema,
+  itemInputToRow,
+} from '@/lib/price-book/schema'
 
 export type ActionState = { error: string | null }
 
@@ -15,6 +22,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // different wording for the same constraint violation.
 const DUPLICATE_GROUP_NAME = 'Ya existe un grupo con ese nombre.'
 const INVALID_GROUP_ID = 'El grupo no es válido.'
+const DUPLICATE_ITEM_CODE = 'Ya existe un concepto con ese código.'
+const INVALID_ITEM_ID = 'El concepto no es válido.'
 
 /**
  * A form field that names a row (`id`, later `group_id`) is attacker
@@ -130,6 +139,122 @@ export async function deleteGroup(
 
   if (error) {
     return { error: describeWriteError(error, DUPLICATE_GROUP_NAME) }
+  }
+
+  revalidatePath('/admin/price-book')
+  return idleState
+}
+
+export async function createItem(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await requireAdmin()
+
+  const parsed = itemInputSchema.safeParse(itemInputFromForm(formData))
+  if (!parsed.success) {
+    return { error: firstIssue(parsed.error) }
+  }
+
+  const { error } = await supabase.from('price_book_items').insert(itemInputToRow(parsed.data))
+
+  if (error) {
+    return { error: describeWriteError(error, DUPLICATE_ITEM_CODE) }
+  }
+
+  revalidatePath('/admin/price-book')
+  return idleState
+}
+
+export async function updateItem(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await requireAdmin()
+
+  const id = readId(formData, 'id')
+  if (id === null) {
+    return { error: INVALID_ITEM_ID }
+  }
+
+  const parsed = itemInputSchema.safeParse(itemInputFromForm(formData))
+  if (!parsed.success) {
+    return { error: firstIssue(parsed.error) }
+  }
+
+  const { error } = await supabase
+    .from('price_book_items')
+    .update(itemInputToRow(parsed.data))
+    .eq('id', id)
+
+  if (error) {
+    return { error: describeWriteError(error, DUPLICATE_ITEM_CODE) }
+  }
+
+  revalidatePath('/admin/price-book')
+  return idleState
+}
+
+/**
+ * Retiring keeps the row -- and its provenance on every quote that already
+ * copied it -- and only flips `is_active` so the catalogue stops offering it
+ * on new quotes. This is the reversible half of the pair below: flip it back
+ * and the item returns exactly as it was.
+ */
+export async function setItemActive(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await requireAdmin()
+
+  const id = readId(formData, 'id')
+  if (id === null) {
+    return { error: INVALID_ITEM_ID }
+  }
+
+  // A hidden field, not a checkbox: both 'true' and 'false' are always
+  // posted, so unlike itemInputFromForm's `=== 'on'` reading there is no
+  // "absent means false" case to account for here.
+  const isActive = formData.get('is_active') === 'true'
+
+  const { error } = await supabase
+    .from('price_book_items')
+    .update({ is_active: isActive })
+    .eq('id', id)
+
+  if (error) {
+    return { error: describeWriteError(error, DUPLICATE_ITEM_CODE) }
+  }
+
+  revalidatePath('/admin/price-book')
+  return idleState
+}
+
+/**
+ * Deleting removes the row outright -- the irreversible half of the pair
+ * above. `quote_items.price_book_item_id` is `on delete set null`
+ * (0001_core_schema.sql), so a quote that already copied this item, sent or
+ * not, keeps every name, unit and price it copied and only loses the
+ * pointer back to the catalogue: nothing a client has already seen changes.
+ * From outside, a retired item and a deleted one look identical -- both stop
+ * appearing on new quotes -- but only retiring can be undone. That
+ * difference belongs in the confirmation dialog that calls this action.
+ */
+export async function deleteItem(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await requireAdmin()
+
+  const id = readId(formData, 'id')
+  if (id === null) {
+    return { error: INVALID_ITEM_ID }
+  }
+
+  const { error } = await supabase.from('price_book_items').delete().eq('id', id)
+
+  if (error) {
+    return { error: describeWriteError(error, DUPLICATE_ITEM_CODE) }
   }
 
   revalidatePath('/admin/price-book')

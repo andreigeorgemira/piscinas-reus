@@ -275,3 +275,82 @@ describe('price book group and item writes', () => {
     expect(after.data?.name).toBe(before.data?.name)
   })
 })
+
+// Deleting a catalogue item is the irreversible sibling of retiring it
+// (setItemActive). This proves the reason it is still safe to offer once an
+// item has been copied onto a quote: quote_items.price_book_item_id is
+// `on delete set null` (0001_core_schema.sql), so the line loses only the
+// pointer back to the catalogue and keeps every field a client has already
+// seen. The fixture sends the quote only after its line exists, because
+// 0009_quote_immutability.sql freezes quote_items the moment a quote leaves
+// 'draft'.
+describe('deleting a price book item', () => {
+  it("unlinks a sent quote's line but leaves its copied name and price untouched", async () => {
+    const db = adminDb()
+
+    const { data: client, error: clientError } = await db
+      .from('clients')
+      .insert({ email: uniqueEmail('provenance'), full_name: 'Cliente Provenance' })
+      .select()
+      .single()
+    if (clientError) throw clientError
+
+    const { data: item, error: itemError } = await db
+      .from('price_book_items')
+      .insert({
+        code: 'PROV-001',
+        name: 'Bomba de calor',
+        unit: 'unit',
+        unit_cost: 500,
+        unit_price: 900,
+        is_active: true,
+      })
+      .select()
+      .single()
+    if (itemError) throw itemError
+
+    const { data: quote, error: quoteError } = await db
+      .from('quotes')
+      .insert({
+        client_id: client!.id,
+        reference: 'Q-2026-9001',
+        title: 'Provenance',
+        access_token: 'token-provenance',
+      })
+      .select()
+      .single()
+    if (quoteError) throw quoteError
+
+    const { data: line, error: lineError } = await db
+      .from('quote_items')
+      .insert({
+        quote_id: quote!.id,
+        price_book_item_id: item!.id,
+        name: item!.name,
+        unit: item!.unit,
+        unit_price: item!.unit_price,
+      })
+      .select()
+      .single()
+    if (lineError) throw lineError
+
+    const { error: sendError } = await db
+      .from('quotes')
+      .update({ status: 'sent' })
+      .eq('id', quote!.id)
+    if (sendError) throw sendError
+
+    const { error: deleteError } = await staff.from('price_book_items').delete().eq('id', item!.id)
+    expect(deleteError).toBeNull()
+
+    const { data: survivor, error: survivorError } = await db
+      .from('quote_items')
+      .select('name, unit_price, price_book_item_id')
+      .eq('id', line!.id)
+      .single()
+    if (survivorError) throw survivorError
+    expect(survivor.name).toBe('Bomba de calor')
+    expect(survivor.unit_price).toBe(900)
+    expect(survivor.price_book_item_id).toBeNull()
+  })
+})
