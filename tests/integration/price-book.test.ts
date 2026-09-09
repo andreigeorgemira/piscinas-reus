@@ -154,3 +154,124 @@ describe('listPriceBook ungrouped bucket', () => {
     }
   })
 })
+
+// Server Actions need a request context (cookies()) that vitest cannot
+// provide, so this block does not call src/app/admin/price-book/actions.ts
+// directly. Instead it runs the same statements those actions issue,
+// through the same authenticated clients, and pins the schema/RLS behaviour
+// those actions are built on: unique-name and unique-code violations
+// surfacing as 23505 for describeWriteError to translate, a deleted group
+// leaving its items in place, and a customer's writes being refused or
+// matching nothing. It may well pass on the first run -- that is the point
+// of a characterisation test, not a sign the schema is untested.
+describe('price book group and item writes', () => {
+  it('lets staff create a group', async () => {
+    const { error } = await staff.from('price_book_groups').insert({ name: 'Vasos', position: 5 })
+    expect(error).toBeNull()
+  })
+
+  it('rejects a duplicate group name with 23505', async () => {
+    // 'Albanileria' already exists from the module-scope fixture.
+    const { error } = await staff
+      .from('price_book_groups')
+      .insert({ name: 'Albanileria', position: 9 })
+    expect(error?.code).toBe('23505')
+  })
+
+  it('rejects a duplicate item code with 23505', async () => {
+    // 'ALB-002' already belongs to the fixture's 'Ladrillo' item.
+    const { error } = await staff.from('price_book_items').insert({
+      group_id: groupId,
+      code: 'ALB-002',
+      name: 'Duplicado',
+      unit: 'unit',
+      unit_cost: 1,
+      unit_price: 1,
+      is_active: true,
+    })
+    expect(error?.code).toBe('23505')
+  })
+
+  it('lets two items share a null code', async () => {
+    const { error } = await staff.from('price_book_items').insert([
+      {
+        group_id: groupId,
+        code: null,
+        name: 'Sin código A',
+        unit: 'unit',
+        unit_cost: 1,
+        unit_price: 1,
+        is_active: true,
+      },
+      {
+        group_id: groupId,
+        code: null,
+        name: 'Sin código B',
+        unit: 'unit',
+        unit_cost: 1,
+        unit_price: 1,
+        is_active: true,
+      },
+    ])
+    expect(error).toBeNull()
+  })
+
+  it("moves a deleted group's items to the ungrouped bucket instead of deleting them", async () => {
+    const db = adminDb()
+    const { data: group } = await db
+      .from('price_book_groups')
+      .insert({ name: 'Temporal', position: 50 })
+      .select()
+      .single()
+    const { data: item } = await db
+      .from('price_book_items')
+      .insert({
+        group_id: group!.id,
+        code: 'TMP-001',
+        name: 'Item temporal',
+        unit: 'unit',
+        unit_cost: 1,
+        unit_price: 1,
+        is_active: true,
+      })
+      .select()
+      .single()
+
+    const { error } = await staff.from('price_book_groups').delete().eq('id', group!.id)
+    expect(error).toBeNull()
+
+    const { data: survivor } = await db
+      .from('price_book_items')
+      .select('group_id')
+      .eq('id', item!.id)
+      .single()
+    expect(survivor?.group_id).toBeNull()
+  })
+
+  it('refuses a customer insert into price_book_groups', async () => {
+    const { error } = await customer
+      .from('price_book_groups')
+      .insert({ name: 'Intruso', position: 1 })
+    expect(error?.code).toBe('42501')
+  })
+
+  it('leaves a group untouched when a customer updates or deletes it, since RLS matches no row', async () => {
+    const db = adminDb()
+    const before = await db.from('price_book_groups').select('name').eq('id', groupId).single()
+
+    // Neither call errors: RLS filters `groupId` out of the customer's view
+    // before the write ever runs, so both statements affect zero rows rather
+    // than being refused the way the insert above is.
+    const update = await customer
+      .from('price_book_groups')
+      .update({ name: 'Hackeado' })
+      .eq('id', groupId)
+    expect(update.error).toBeNull()
+
+    const del = await customer.from('price_book_groups').delete().eq('id', groupId)
+    expect(del.error).toBeNull()
+
+    const after = await db.from('price_book_groups').select('name').eq('id', groupId).single()
+    expect(after.data?.name).toBe(before.data?.name)
+  })
+})
