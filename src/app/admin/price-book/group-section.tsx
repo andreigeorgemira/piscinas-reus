@@ -37,6 +37,20 @@ function deleteQuestion(name: string, itemCount: number): string {
   return `¿Borrar el grupo «${name}»? Sus ${itemCount} conceptos no se borran: pasan a «Sin grupo».`
 }
 
+/**
+ * What an action returned, plus which opening of the form asked for it.
+ *
+ * useActionState keeps its last state after the form closes, so a message
+ * from a refused write outlives the fields that caused it. Stamping the
+ * session it belongs to -- and bumping that session on every open and every
+ * close -- is what stops it rendering, and being announced again, over the
+ * freshly defaulted fields of the next opening.
+ */
+type FormState = ActionState & { session: number }
+
+/** Seed state for the above: -1 belongs to no opening, so it never matches one. */
+const idleFormState: FormState = { ...idleState, session: -1 }
+
 export function GroupSection({
   group,
   groups,
@@ -47,14 +61,26 @@ export function GroupSection({
   const headingId = useId()
   const newItemFormId = useId()
 
-  const [renaming, setRenaming] = useState(false)
-  const [adding, setAdding] = useState(false)
+  const [renamer, setRenamer] = useState({ open: false, session: 0 })
+  const [adder, setAdder] = useState({ open: false, session: 0 })
+
+  const renaming = renamer.open
+  const adding = adder.open
+
+  function setRenaming(open: boolean) {
+    setRenamer((current) => ({ open, session: current.session + 1 }))
+  }
+
+  function setAdding(open: boolean) {
+    setAdder((current) => ({ open, session: current.session + 1 }))
+  }
+
   // Bumped after each insert so the new-item row remounts with empty fields,
   // ready for the next one. Staff enter a catalogue in runs, not one row a day.
   const [newItemKey, setNewItemKey] = useState(0)
   const renameButton = useRef<HTMLButtonElement>(null)
 
-  const [renameState, renameAction, renamingPending] = useActionState<ActionState, FormData>(
+  const [renameState, renameAction, renamingPending] = useActionState<FormState, FormData>(
     async (previous, formData) => {
       const next = await updateGroup(previous, formData)
       // startTransition, because a state update after an await is not part of
@@ -64,14 +90,14 @@ export function GroupSection({
       if (next.error === null) {
         startTransition(() => setRenaming(false))
       }
-      return next
+      return { ...next, session: renamer.session }
     },
-    idleState,
+    idleFormState,
   )
 
   const [deleteState, deleteAction] = useActionState(deleteGroup, idleState)
 
-  const [addState, addAction, addPending] = useActionState<ActionState, FormData>(
+  const [addState, addAction, addPending] = useActionState<FormState, FormData>(
     async (previous, formData) => {
       const next = await createItem(previous, formData)
       // Inside a transition so the blank row and the revalidated table commit
@@ -79,9 +105,9 @@ export function GroupSection({
       if (next.error === null) {
         startTransition(() => setNewItemKey((key) => key + 1))
       }
-      return next
+      return { ...next, session: adder.session }
     },
-    idleState,
+    idleFormState,
   )
 
   // Closing the rename form takes the focused control with it; hand focus back
@@ -97,9 +123,11 @@ export function GroupSection({
   // The "Sin grupo" bucket is not a group anyone created: there is no row to
   // rename and none to delete.
   const groupId = group.id
-  // A rename's message belongs to the open rename form, and goes when Cancelar
-  // closes it. A failed delete has no form to close, so its message stays.
-  const groupError = (renaming ? renameState.error : null) ?? deleteState.error
+  // Only the messages the current openings produced. A failed delete has no
+  // form to open or close, so its message has no session and simply stays.
+  const renameError = renameState.session === renamer.session ? renameState.error : null
+  const addError = addState.session === adder.session ? addState.error : null
+  const groupError = renameError ?? deleteState.error
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-2">
@@ -111,7 +139,7 @@ export function GroupSection({
           type="button"
           aria-label={`Añadir concepto a ${group.name}`}
           aria-expanded={adding}
-          onClick={() => setAdding((open) => !open)}
+          onClick={() => setAdding(!adding)}
           className={BUTTON_CLASS}
         >
           + Concepto
@@ -123,7 +151,7 @@ export function GroupSection({
               type="button"
               aria-label={`Renombrar ${group.name}`}
               aria-expanded={renaming}
-              onClick={() => setRenaming((open) => !open)}
+              onClick={() => setRenaming(!renaming)}
               className={BUTTON_CLASS}
             >
               Renombrar
@@ -230,11 +258,11 @@ export function GroupSection({
                   </form>
                 </td>
               </tr>
-              {addState.error ? (
+              {addError ? (
                 <tr>
                   <td colSpan={ITEM_TABLE_COLUMN_COUNT} className={CELL_CLASS}>
                     <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-                      {addState.error}
+                      {addError}
                     </p>
                   </td>
                 </tr>

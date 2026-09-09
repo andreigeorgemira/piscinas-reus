@@ -19,12 +19,29 @@ const BUTTON_CLASS =
 
 const PRIMARY_BUTTON_CLASS = `${BUTTON_CLASS} bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300`
 
+/**
+ * What updateItem returned, plus which opening of the editor asked for it.
+ *
+ * useActionState keeps its last state after the editor closes, so a message
+ * from a refused save outlives the fields that caused it. Stamping the
+ * session it belongs to -- and bumping that session on every open and every
+ * close -- is what stops it rendering, and being announced again, over the
+ * freshly defaulted fields of the next opening.
+ */
+type SaveState = ActionState & { session: number }
+
 export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOption[] }) {
-  const [editing, setEditing] = useState(false)
+  const [editor, setEditor] = useState({ open: false, session: 0 })
   const [oneClickError, setOneClickError] = useState<string | null>(null)
   const editButton = useRef<HTMLButtonElement>(null)
 
-  const [saveState, saveAction, saving] = useActionState<ActionState, FormData>(
+  const editing = editor.open
+
+  function setEditing(open: boolean) {
+    setEditor((current) => ({ open, session: current.session + 1 }))
+  }
+
+  const [saveState, saveAction, saving] = useActionState<SaveState, FormData>(
     async (previous, formData) => {
       const next = await updateItem(previous, formData)
       // Only a clean save closes the row: an error has to stay next to the
@@ -36,9 +53,10 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
       if (next.error === null) {
         startTransition(() => setEditing(false))
       }
-      return next
+      return { ...next, session: editor.session }
     },
-    idleState,
+    // -1 belongs to no opening, so the seed state can never match one.
+    { ...idleState, session: -1 },
   )
 
   // Closing the editor removes whatever had focus (Guardar or Cancelar), which
@@ -69,10 +87,10 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
 
   const formId = `item-${item.id}`
   const groupName = groups.find((group) => group.id === item.groupId)?.name ?? UNGROUPED_NAME
-  // A failed save's message belongs to the open editor: Cancelar closes the
-  // editor, so the message goes with it rather than hanging under a read-only
-  // row that no longer shows what caused it.
-  const error = (editing ? saveState.error : null) ?? oneClickError
+  // Only the message this opening of the editor produced. Every open and every
+  // close moves the session on, so a message left behind by an editor that was
+  // cancelled cannot reappear over the next one's clean fields.
+  const error = (saveState.session === editor.session ? saveState.error : null) ?? oneClickError
 
   return (
     <>
