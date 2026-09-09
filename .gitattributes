@@ -1,0 +1,3 @@
+# Line endings are normalised to LF in the repository.
+# Without this, a CRLF-writing editor makes every file look modified.
+* text=auto eol=lf
