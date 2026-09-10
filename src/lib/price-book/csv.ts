@@ -1,0 +1,333 @@
+import { firstIssue, groupInputSchema, itemInputSchema, UNIT_LABELS, UNIT_TYPES } from './schema'
+import type { ItemInput, UnitType } from './schema'
+
+/**
+ * Spanish Excel writes ';' as the field delimiter, because ',' is already the
+ * decimal separator staff type prices with. Only the header line is looked
+ * at: no decimal can appear there, so any ';' in it is decisive -- a comma
+ * alongside it is just a column name that happens to contain one, and both
+ * present still means ';'.
+ */
+export function detectDelimiter(firstLine: string): ';' | ',' {
+  return firstLine.includes(';') ? ';' : ','
+}
+
+/**
+ * A character-state machine covering RFC 4180 as a spreadsheet actually
+ * emits it: quoted fields, a doubled quote for a literal one, delimiters and
+ * newlines inside quotes, and CRLF line endings. A regex-based split cannot
+ * express "this delimiter is inside quotes, ignore it" without look-behind
+ * gymnastics that break on the doubled-quote case, so this walks the string
+ * one character at a time instead.
+ */
+export function parseCsv(text: string, delimiter: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+  let i = 0
+
+  while (i < text.length) {
+    const char = text[i]
+    if (char === undefined) {
+      break
+    }
+
+    if (inQuotes) {
+      if (char === '"') {
+        // A doubled quote is a literal quote, not the end of the field --
+        // only a lone quote closes it.
+        if (text[i + 1] === '"') {
+          field += '"'
+          i += 2
+          continue
+        }
+        inQuotes = false
+        i += 1
+        continue
+      }
+      // Delimiters and newlines inside quotes are literal field content.
+      field += char
+      i += 1
+      continue
+    }
+
+    if (char === '"' && field === '') {
+      // A quote only opens a quoted field when it is the FIRST character of
+      // that field. A quote appearing after other characters (a diameter
+      // written '1" PVC', a straight quote pasted mid-word) is not RFC 4180
+      // field-opening -- treating it as one flips the machine into quote mode
+      // with no way back except another '"' turning up later in the file,
+      // silently swallowing every delimiter and newline in between.
+      inQuotes = true
+      i += 1
+      continue
+    }
+
+    if (char === delimiter) {
+      row.push(field)
+      field = ''
+      i += 1
+      continue
+    }
+
+    if (char === '\r') {
+      // Swallowed unconditionally: paired with a following '\n' this makes
+      // CRLF read as one row ending. A bare '\r' with no '\n' is not a case
+      // a spreadsheet export produces, so it is not pinned separately.
+      i += 1
+      continue
+    }
+
+    if (char === '\n') {
+      row.push(field)
+      rows.push(row)
+      row = []
+      field = ''
+      i += 1
+      continue
+    }
+
+    field += char
+    i += 1
+  }
+
+  // A file ending cleanly on a newline has nothing left to flush here -- the
+  // blank tail after the last '\n' is not a row. Anything left in `field` or
+  // `row` (no trailing newline, or content since the last one) is real.
+  if (field !== '' || row.length > 0) {
+    row.push(field)
+    rows.push(row)
+  }
+
+  return rows
+}
+
+export type ImportRow = { line: number; groupName: string | null; input: ItemInput }
+export type ImportIssue = { line: number; message: string }
+
+type ColumnKey = 'name' | 'unit' | 'unitCost' | 'unitPrice' | 'groupName' | 'code' | 'description'
+
+// Staff export in Spanish; anything generated from this codebase (a
+// re-exported catalogue, a template) comes out in English. Both are accepted
+// so the same file round-trips either way.
+const HEADER_ALIASES: Record<string, ColumnKey> = {
+  concepto: 'name',
+  concept: 'name',
+  name: 'name',
+  unidad: 'unit',
+  unit: 'unit',
+  coste: 'unitCost',
+  cost: 'unitCost',
+  precio: 'unitPrice',
+  price: 'unitPrice',
+  grupo: 'groupName',
+  group: 'groupName',
+  codigo: 'code',
+  code: 'code',
+  descripcion: 'description',
+  description: 'description',
+}
+
+const REQUIRED_COLUMNS: { key: ColumnKey; label: string }[] = [
+  { key: 'name', label: 'concepto' },
+  { key: 'unit', label: 'unidad' },
+  { key: 'unitCost', label: 'coste' },
+  { key: 'unitPrice', label: 'precio' },
+]
+
+// Accent- and case-insensitive so 'Código' and 'codigo' match the same
+// column, since staff spreadsheets are not consistent about typing accents.
+function normalizeHeader(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function buildColumnIndex(headerRow: string[]): Map<ColumnKey, number> {
+  const columns = new Map<ColumnKey, number>()
+  headerRow.forEach((cell, index) => {
+    const key = HEADER_ALIASES[normalizeHeader(cell)]
+    // First occurrence wins -- a repeated header naming the same column
+    // twice should not silently overwrite what the first one pointed at.
+    if (key !== undefined && !columns.has(key)) {
+      columns.set(key, index)
+    }
+  })
+  return columns
+}
+
+function getCell(cells: string[], index: number | undefined): string {
+  if (index === undefined) {
+    return ''
+  }
+  return cells[index] ?? ''
+}
+
+// Staff type the unit the way they say it out loud (hora, ud., partida, m²),
+// not the enum value it maps to. Built from UNIT_LABELS so every alias in
+// the form's own dropdown is accepted here too, plus the enum values
+// themselves for a file generated by this codebase.
+function normalizeUnit(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\.$/, '')
+}
+
+const UNIT_ALIASES: Record<string, UnitType> = {}
+for (const unit of UNIT_TYPES) {
+  UNIT_ALIASES[unit] = unit
+  UNIT_ALIASES[normalizeUnit(UNIT_LABELS[unit])] = unit
+}
+
+function resolveUnit(raw: string): string {
+  // A word not in the alias table is passed through unmapped rather than
+  // rejected here -- itemInputSchema already rejects an unknown unit with
+  // the right Spanish message, so there is no need to duplicate that check.
+  return UNIT_ALIASES[normalizeUnit(raw)] ?? raw.trim()
+}
+
+const EMPTY_FILE_ISSUE: ImportIssue = { line: 1, message: 'El archivo está vacío.' }
+
+/**
+ * Which optional columns the file's header actually named. A coded row's
+ * upsert must not overwrite `description` from a file that never carried
+ * that column at all -- a missing column and a blank cell mean different
+ * things (leave untouched vs. clear on purpose), and that distinction only
+ * exists at the file level, not per row. See commitImport in
+ * src/app/admin/price-book/import/actions.ts.
+ */
+export type ImportColumns = { description: boolean }
+
+const NO_OPTIONAL_COLUMNS: ImportColumns = { description: false }
+
+/**
+ * Parses a staff-exported price book CSV into rows validated against the
+ * exact schema the forms use, plus a list of issues. A bad row is reported
+ * by line number and does not stop the rest of the file from importing --
+ * one unreadable price must not cost the other four hundred rows.
+ *
+ * Every row is validated with groupId: '' and carries its groupName
+ * separately: the file names groups by name, it does not know their ids --
+ * resolving a name to an id is the caller's job, done at import time against
+ * the database.
+ */
+export function parseImport(
+  text: string,
+): { rows: ImportRow[]; issues: ImportIssue[]; columns: ImportColumns } {
+  // Excel writes a BOM at the very start of the file, inside what becomes
+  // the first header cell.
+  const withoutBom = text.replace(/^\uFEFF/, '')
+
+  if (withoutBom.trim() === '') {
+    return { rows: [], issues: [EMPTY_FILE_ISSUE], columns: NO_OPTIONAL_COLUMNS }
+  }
+
+  const firstLineEnd = withoutBom.search(/\r\n|\r|\n/)
+  const firstLine = firstLineEnd === -1 ? withoutBom : withoutBom.slice(0, firstLineEnd)
+  const delimiter = detectDelimiter(firstLine)
+  const table = parseCsv(withoutBom, delimiter)
+
+  const headerRow = table[0]
+  if (headerRow === undefined) {
+    return { rows: [], issues: [EMPTY_FILE_ISSUE], columns: NO_OPTIONAL_COLUMNS }
+  }
+
+  const columns = buildColumnIndex(headerRow)
+  const importColumns: ImportColumns = { description: columns.has('description') }
+
+  const missingColumns = REQUIRED_COLUMNS.filter((column) => !columns.has(column.key))
+  if (missingColumns.length > 0) {
+    return {
+      rows: [],
+      issues: missingColumns.map((column) => ({
+        line: 1,
+        message: `Falta la columna "${column.label}".`,
+      })),
+      columns: importColumns,
+    }
+  }
+
+  const rows: ImportRow[] = []
+  const issues: ImportIssue[] = []
+  // Left to the database, a duplicate code arrives as one opaque 23505 after
+  // some rows are already written. Catching it here names both clashing
+  // lines, and keeps only the first row of the pair.
+  const firstLineForCode = new Map<string, number>()
+
+  for (let offset = 0; offset < table.length - 1; offset += 1) {
+    const cells = table[offset + 1]
+    if (cells === undefined) {
+      continue
+    }
+    // One for the header row, one because humans count from 1.
+    const line = offset + 2
+
+    if (cells.every((cell) => cell.trim() === '')) {
+      // A blank line mid-file is not a row -- it still consumes a line
+      // number so the rows after it keep matching what the person sees in
+      // their spreadsheet.
+      continue
+    }
+
+    const candidate = {
+      groupId: '',
+      code: columns.has('code') ? getCell(cells, columns.get('code')) : null,
+      name: getCell(cells, columns.get('name')),
+      description: columns.has('description') ? getCell(cells, columns.get('description')) : null,
+      unit: resolveUnit(getCell(cells, columns.get('unit'))),
+      unitCost: getCell(cells, columns.get('unitCost')),
+      unitPrice: getCell(cells, columns.get('unitPrice')),
+      // Imported concepts start active; the CSV column contract has no
+      // "activo" column of its own.
+      isActive: true,
+    }
+
+    const parsed = itemInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      issues.push({ line, message: firstIssue(parsed.error) })
+      continue
+    }
+
+    // The group cell goes through the very field the group form on the
+    // screen posts into, so one concept keeps one shape: a name this parser
+    // accepts is a name that form would accept. price_book_groups.name is
+    // bare `text` (supabase/migrations/0001_core_schema.sql), so nothing
+    // underneath caps it - without this check a misaligned column, or a
+    // hand-crafted POST, creates a group whose name is a whole 200 KB cell
+    // and then renders it as an <h2> and inside every row's Grupo select.
+    // Reported as a per-line issue rather than truncated: quietly storing a
+    // different name than the file asked for is the one outcome nobody can
+    // see afterwards.
+    //
+    // Checked before the code below is registered, so a row dropped here
+    // never becomes the "también en la línea N" half of a later row's
+    // duplicate-code report.
+    const groupCell = columns.has('groupName') ? getCell(cells, columns.get('groupName')).trim() : ''
+    let groupName: string | null = null
+    if (groupCell !== '') {
+      const parsedGroup = groupInputSchema.shape.name.safeParse(groupCell)
+      if (!parsedGroup.success) {
+        issues.push({ line, message: firstIssue(parsedGroup.error) })
+        continue
+      }
+      groupName = parsedGroup.data
+    }
+
+    if (parsed.data.code !== null) {
+      const clashLine = firstLineForCode.get(parsed.data.code)
+      if (clashLine !== undefined) {
+        issues.push({
+          line,
+          message: `El código "${parsed.data.code}" está repetido (también en la línea ${clashLine}).`,
+        })
+        continue
+      }
+      firstLineForCode.set(parsed.data.code, line)
+    }
+
+    rows.push({ line, groupName, input: parsed.data })
+  }
+
+  return { rows, issues, columns: importColumns }
+}

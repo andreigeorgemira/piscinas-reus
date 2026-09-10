@@ -20,7 +20,16 @@ max_rows = 1000
 # `postgres` are reachable through the Data API roles (`anon`, `authenticated`, `service_role`)
 # without explicit GRANTs, matching the cloud default. Set to `false` to require explicit GRANTs
 # instead. Left unset, a fresh project falls back to `true`.
-# auto_expose_new_tables = true
+#
+# Set to `false` deliberately. `true` is the rule that handed `anon` full DML on all nine base
+# tables the moment each was created, leaving RLS as the only thing in the way - the drift
+# 0010_table_grants.sql had to revoke one table at a time, and the reason local and hosted
+# disagreed for a whole plan without anyone noticing. 0010 fixes the tables that exist; only this
+# setting stops the next new table from arriving with the same grants all over again. With it
+# `false`, a table reachable through the Data API has to say so in its own migration, the way
+# 0010 spells every grant out. Local development only: it changes nothing on the hosted project,
+# where that discipline has to live in the migrations themselves either way.
+auto_expose_new_tables = false
 
 [api.tls]
 # Enable HTTPS endpoints locally using a self-signed certificate.

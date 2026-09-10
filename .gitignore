@@ -60,3 +60,6 @@ supabase/.temp/
 # QA artefacts from browser-driven checks
 .playwright-mcp/
 /*.png
+
+
+docs/*

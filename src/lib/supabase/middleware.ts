@@ -64,11 +64,22 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   }
 
   if (isAdminPath(path) && user) {
-    const { data: profile } = await supabase
+    const { data: profile, error } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single()
+
+    if (error) {
+      // Logged, then deliberately fallen through to the redirect below, for
+      // the same reason as requireAdmin() in src/lib/auth/require-admin.ts:
+      // a lookup that failed has not said this visitor is staff, so the only
+      // safe reading is that they are not. The pair fails closed
+      // symmetrically, which is right, and used to fail silently, which was
+      // not - an admin bounced to /portal by a broken grant left no trace at
+      // all for the team to find.
+      console.error('profiles role lookup failed in middleware', error)
+    }
 
     if (profile?.role !== 'admin') {
       const url = request.nextUrl.clone()

@@ -98,9 +98,16 @@ describe('clients table', () => {
     expect(data!.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('returns nothing to an anonymous caller', async () => {
-    const { data } = await anonDb().from('clients').select('id')
-    expect(data).toEqual([])
+  it('refuses an anonymous caller at the grant layer', async () => {
+    // Before 0010_table_grants.sql, anon held SELECT on every base table
+    // via Supabase's default privileges, and this assertion (`[]`)
+    // documented RLS refusing the row rather than the grant refusing the
+    // statement. The grant is gone now, so the request is refused before
+    // RLS is ever consulted - see tests/integration/grants.test.ts for the
+    // full sweep across all nine base tables.
+    const { data, error } = await anonDb().from('clients').select('id')
+    expect(data).toBeNull()
+    expect(error?.code).toBe('42501')
   })
 
   it('refuses a client trying to rewrite their own email', async () => {
@@ -236,8 +243,14 @@ describe('leads table', () => {
   })
 
   it('does not let anonymous callers read leads back', async () => {
-    const { data } = await anonDb().from('leads').select('id')
-    expect(data).toEqual([])
+    // Before 0010_table_grants.sql this was RLS refusing a request anon
+    // still had SELECT privilege to make (`[]`). anon now holds INSERT
+    // only on leads, so the request is refused at the grant layer instead,
+    // before RLS is consulted - which also means `.insert(...).select()`
+    // can never be used to read back the row a request just wrote.
+    const { data, error } = await anonDb().from('leads').select('id')
+    expect(data).toBeNull()
+    expect(error?.code).toBe('42501')
   })
 
   it('lets an admin read leads', async () => {
