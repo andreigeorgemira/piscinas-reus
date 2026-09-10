@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { adminDb, makeAdmin, uniqueEmail } from '../integration/helpers/db'
+import { adminDb, anonDb, makeAdmin, uniqueEmail } from '../integration/helpers/db'
 
 const password = 'test-password-123'
 const staffEmail = uniqueEmail('price-book-staff-e2e')
@@ -141,26 +141,112 @@ test('reports a duplicate code in Spanish instead of crashing', async ({ page })
   expect(data).toHaveLength(1)
 })
 
-test('retires and reactivates Invernaje', async ({ page }) => {
+test('retires and reactivates a concept', async ({ page }) => {
+  // Seeded here rather than read out of supabase/seed.sql. This test used to
+  // drive the seed's own 'Invernaje' row, which made it depend on a database
+  // that had been reset and not since been swept by `npm run test:db` -- and
+  // the integration suite's resetDatabase() deletes every price_book row,
+  // seed included. That put an `npx supabase db reset` in the middle of the
+  // test chain as an unwritten prerequisite. Its own fixture, stamped with
+  // runId like every other test in this file, removes the ordering
+  // requirement rather than documenting it.
+  const admin = adminDb()
+  const groupName = `Grupo Retirada ${runId}`
+  const itemName = `Concepto Retirada ${runId}`
+
+  const { data: group, error: groupError } = await admin
+    .from('price_book_groups')
+    .insert({ name: groupName })
+    .select('id')
+    .single()
+  if (groupError) throw groupError
+
+  const { error: itemError } = await admin.from('price_book_items').insert({
+    group_id: group!.id,
+    code: `RET-${runId}`,
+    name: itemName,
+    unit: 'lot',
+    unit_cost: 110,
+    unit_price: 195,
+    is_active: true,
+  })
+  if (itemError) throw itemError
+
   await loginAsStaff(page)
   await page.goto('/admin/price-book')
 
-  const region = page.getByRole('region', { name: 'Mantenimiento' })
+  const region = page.getByRole('region', { name: groupName })
   // A live filter, not a snapshot: it is re-evaluated on every assertion
   // below, so it keeps matching the same row across the Sí/No flip that
   // Retirar/Reactivar causes.
-  const row = region.locator('tr').filter({ hasText: 'Invernaje' })
+  const row = region.locator('tr').filter({ hasText: itemName })
 
   await expect(row.getByText('Sí', { exact: true })).toBeVisible()
-  await row.getByRole('button', { name: 'Retirar Invernaje' }).click()
+  await row.getByRole('button', { name: `Retirar ${itemName}` }).click()
 
-  await expect(row.getByRole('button', { name: 'Reactivar Invernaje' })).toBeVisible()
+  await expect(row.getByRole('button', { name: `Reactivar ${itemName}` })).toBeVisible()
   await expect(row.getByText('No', { exact: true })).toBeVisible()
 
-  await row.getByRole('button', { name: 'Reactivar Invernaje' }).click()
+  await row.getByRole('button', { name: `Reactivar ${itemName}` }).click()
 
-  await expect(row.getByRole('button', { name: 'Retirar Invernaje' })).toBeVisible()
+  await expect(row.getByRole('button', { name: `Retirar ${itemName}` })).toBeVisible()
   await expect(row.getByText('Sí', { exact: true })).toBeVisible()
+})
+
+test('refuses the import screen and its writes to a non-admin', async ({ page }) => {
+  const admin = adminDb()
+  const groupName = `Grupo Prohibido ${runId}`
+  const itemName = `Concepto Prohibido ${runId}`
+
+  await loginAsClient(page)
+
+  await page.goto('/admin/price-book/import')
+  await expect(page).toHaveURL(/\/portal/)
+  await expect(page.getByLabel(csvLabel)).toHaveCount(0)
+
+  // The redirect above only proves the screen does not render. What has to
+  // refuse is the layer underneath: previewImport and commitImport are POST
+  // endpoints reachable without ever loading that page, requireAdmin is
+  // defence in depth rather than the boundary, and the boundary is RLS on
+  // the caller's own session. So the two writes commitImport makes are
+  // issued directly, on the very session this browser is signed in with.
+  //
+  // Posting to the Server Functions themselves would mean hand-building
+  // Next's internal Action-RPC request, which breaks on a framework upgrade
+  // and pins nothing about this system; the database refusal is the part
+  // that has to hold either way.
+  const clientDb = anonDb()
+  const signIn = await clientDb.auth.signInWithPassword({ email: clientEmail, password })
+  if (signIn.error) throw signIn.error
+
+  const groupWrite = await clientDb.from('price_book_groups').insert({ name: groupName })
+  expect(groupWrite.error?.code).toBe('42501')
+
+  const itemWrite = await clientDb.from('price_book_items').insert({
+    code: `PROH-${runId}`,
+    name: itemName,
+    unit: 'hour',
+    unit_cost: 1,
+    unit_price: 2,
+    is_active: true,
+  })
+  expect(itemWrite.error?.code).toBe('42501')
+
+  // Read back with the service role, which RLS does not bind: an error on
+  // the client's side would mean nothing if a row had landed anyway.
+  const { data: groups, error: groupsError } = await admin
+    .from('price_book_groups')
+    .select('id')
+    .eq('name', groupName)
+  if (groupsError) throw groupsError
+  expect(groups).toHaveLength(0)
+
+  const { data: items, error: itemsError } = await admin
+    .from('price_book_items')
+    .select('id')
+    .eq('name', itemName)
+  if (itemsError) throw itemsError
+  expect(items).toHaveLength(0)
 })
 
 test('imports a CSV that creates its own group and price', async ({ page }) => {
@@ -347,4 +433,46 @@ test('commits what the preview showed, not what the textarea holds when Importar
     .eq('name', editedName)
   if (editedError) throw editedError
   expect(edited).toHaveLength(0)
+})
+
+test('says on screen that the catalogue is truncated, instead of stopping silently', async ({
+  page,
+}) => {
+  // The one screen-level proof that a capped read is visible rather than
+  // silent: PostgREST returns at most max_rows rows (1000,
+  // supabase/config.toml) and listPriceBook does not paginate.
+  //
+  // Seeded and torn down inside this test. 1001 extra concepts push every
+  // other row this file creates out of the first 1000 the server returns, so
+  // leaving them behind would break the tests around it. That is safe here
+  // because tests in one file run serially (fullyParallel: false in
+  // playwright.config.ts) and auth.spec.ts -- the only file that can run
+  // alongside this one -- never opens this screen.
+  const admin = adminDb()
+  const marker = `Relleno ${runId}`
+  const bulk = Array.from({ length: 1001 }, (_, index) => ({
+    code: `FILL-${runId}-${String(index).padStart(4, '0')}`,
+    name: `${marker} ${index}`,
+    unit: 'unit' as const,
+    unit_cost: 1,
+    unit_price: 2,
+    is_active: true,
+  }))
+
+  const { error: seedError } = await admin.from('price_book_items').insert(bulk)
+  if (seedError) throw seedError
+
+  try {
+    await loginAsStaff(page)
+    await page.goto('/admin/price-book')
+    await expect(
+      page.getByText(/Esta pantalla muestra 1000 de \d+ conceptos/),
+    ).toBeVisible()
+  } finally {
+    const { error: cleanupError } = await admin
+      .from('price_book_items')
+      .delete()
+      .like('name', `${marker} %`)
+    if (cleanupError) throw cleanupError
+  }
 })
