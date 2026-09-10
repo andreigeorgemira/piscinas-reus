@@ -16,6 +16,21 @@ const csvLabel = 'Pega aquí el CSV, o el bloque de celdas copiado desde Excel'
 test.beforeAll(async () => {
   const admin = adminDb()
 
+  // Sweeps the 1001-row fixture the truncation test at the end of this file
+  // seeds, in case an earlier run never got to delete it. That test cleans
+  // up in a `finally`, which Playwright does not guarantee runs when a test
+  // hits its timeout -- and leaked 'Relleno ' rows sort ahead of every code
+  // this file creates (FILL- < IMP- < PROH- < RET-), so 1001 survivors push
+  // all of them past the 1000 rows the server returns and break this whole
+  // file until someone runs `npx supabase db reset`. That reset is exactly
+  // the prerequisite this file was changed to stop needing, so the cleanup
+  // has to be unconditional rather than best-effort.
+  const { error: sweepError } = await admin
+    .from('price_book_items')
+    .delete()
+    .like('name', 'Relleno %')
+  if (sweepError) throw sweepError
+
   const staff = await admin.auth.admin.createUser({
     email: staffEmail,
     password,
