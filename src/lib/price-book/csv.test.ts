@@ -286,6 +286,37 @@ describe('parseImport', () => {
     expect(rows[1]).toMatchObject({ line: 3, input: { name: 'Valvula', unit: 'unit' } })
   })
 
+  it('reports a group name the group form would refuse, and imports no row for it', () => {
+    // price_book_groups.name is bare `text`, so only this check stands
+    // between a misaligned column and a group named with the whole cell.
+    const longName = 'G'.repeat(81)
+    const text = [
+      'concepto;unidad;coste;precio;grupo',
+      `Vaso;m2;10,00;15,00;${longName}`,
+      'Foco;ud.;20,00;25,00;Iluminacion',
+    ].join('\n')
+
+    const { rows, issues } = parseImport(text)
+
+    expect(issues).toEqual([
+      { line: 2, message: 'El nombre del grupo no puede superar los 80 caracteres.' },
+    ])
+    // The rest of the file still imports -- one bad group name costs its own
+    // line and nothing else.
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ line: 3, groupName: 'Iluminacion' })
+  })
+
+  it('accepts a group name exactly at the 80-character limit', () => {
+    const atLimit = 'G'.repeat(80)
+    const text = ['concepto;unidad;coste;precio;grupo', `Vaso;m2;10,00;15,00;${atLimit}`].join('\n')
+
+    const { rows, issues } = parseImport(text)
+
+    expect(issues).toEqual([])
+    expect(rows[0]?.groupName).toBe(atLimit)
+  })
+
   it('strips a leading BOM from the header before matching columns', () => {
     const text = ['﻿concepto;unidad;coste;precio', 'A;m2;10,00;15,00'].join('\n')
 

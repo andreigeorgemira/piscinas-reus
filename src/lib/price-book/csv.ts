@@ -1,4 +1,4 @@
-import { firstIssue, itemInputSchema, UNIT_LABELS, UNIT_TYPES } from './schema'
+import { firstIssue, groupInputSchema, itemInputSchema, UNIT_LABELS, UNIT_TYPES } from './schema'
 import type { ItemInput, UnitType } from './schema'
 
 /**
@@ -289,6 +289,31 @@ export function parseImport(
       continue
     }
 
+    // The group cell goes through the very field the group form on the
+    // screen posts into, so one concept keeps one shape: a name this parser
+    // accepts is a name that form would accept. price_book_groups.name is
+    // bare `text` (supabase/migrations/0001_core_schema.sql), so nothing
+    // underneath caps it - without this check a misaligned column, or a
+    // hand-crafted POST, creates a group whose name is a whole 200 KB cell
+    // and then renders it as an <h2> and inside every row's Grupo select.
+    // Reported as a per-line issue rather than truncated: quietly storing a
+    // different name than the file asked for is the one outcome nobody can
+    // see afterwards.
+    //
+    // Checked before the code below is registered, so a row dropped here
+    // never becomes the "también en la línea N" half of a later row's
+    // duplicate-code report.
+    const groupCell = columns.has('groupName') ? getCell(cells, columns.get('groupName')).trim() : ''
+    let groupName: string | null = null
+    if (groupCell !== '') {
+      const parsedGroup = groupInputSchema.shape.name.safeParse(groupCell)
+      if (!parsedGroup.success) {
+        issues.push({ line, message: firstIssue(parsedGroup.error) })
+        continue
+      }
+      groupName = parsedGroup.data
+    }
+
     if (parsed.data.code !== null) {
       const clashLine = firstLineForCode.get(parsed.data.code)
       if (clashLine !== undefined) {
@@ -300,9 +325,6 @@ export function parseImport(
       }
       firstLineForCode.set(parsed.data.code, line)
     }
-
-    const groupCell = columns.has('groupName') ? getCell(cells, columns.get('groupName')).trim() : ''
-    const groupName = groupCell === '' ? null : groupCell
 
     rows.push({ line, groupName, input: parsed.data })
   }

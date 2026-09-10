@@ -18,7 +18,10 @@ export const UNIT_LABELS: Record<UnitType, string> = {
   lot: 'partida',
 }
 
-// The largest amount `numeric(12,2)` can hold: 10 integer digits + 2 decimals.
+// A business ceiling, not a column limit: numeric(12,2) holds ten integer
+// digits, up to 9_999_999_999.99. No single catalogue line is worth ten
+// million euros, so a figure at or above that is a typo - a stray digit, or
+// cents typed as euros - and is worth refusing before it reaches a quote.
 const MAX_MONEY = 9_999_999.99
 
 /**

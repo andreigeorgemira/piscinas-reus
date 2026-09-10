@@ -281,7 +281,7 @@ describe('itemInputSchema', () => {
     }
   })
 
-  it('rejects a price too large for numeric(12,2)', () => {
+  it('rejects a price above the business ceiling -- numeric(12,2) would hold it', () => {
     const result = itemInputSchema.safeParse({
       groupId: null,
       code: null,
