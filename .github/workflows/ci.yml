@@ -61,3 +61,71 @@ jobs:
       - name: Stop Supabase
         if: always()
         run: npx supabase stop
+
+  # Shows, on every pull request, which migrations merging it would apply to the
+  # hosted database. Read-only: --dry-run connects, compares the repo's
+  # migrations against the remote history table, and prints the difference
+  # without running anything.
+  migration-preview:
+    name: Migrations a merge would apply
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      - name: Dry run
+        run: supabase db push --dry-run --db-url "$SUPABASE_DB_URL"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+  # Applies migrations to the hosted database when a merge lands on main, and
+  # only then. `needs: verify` means a red test suite stops the migration too.
+  #
+  # This runs unattended. Two rules keep that safe, and both are the author's to
+  # honour rather than the workflow's to enforce:
+  #
+  #   1. A migration must not break the code that is already deployed. Vercel
+  #      builds the merge commit in parallel with this job, so for a few minutes
+  #      the old code runs against the new schema. Add columns, add tables, add
+  #      grants; drop nothing until the deploy that stopped using it is live.
+  #   2. `supabase db push` only goes forward. There is no down migration and no
+  #      undo, so a wrong migration is fixed by writing the next one.
+  migrate:
+    name: Apply migrations to production
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Two merges in quick succession must not push at the same time, and a push
+    # already under way must never be cancelled: a half-applied migration leaves
+    # the database in a state no commit describes.
+    concurrency:
+      group: migrate-production
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      # SUPABASE_DB_URL is the *session pooler* connection string from the
+      # dashboard, not db.<ref>.supabase.co — the direct host resolves to IPv6
+      # only and GitHub's runners are IPv4, so the direct one fails with
+      # "network unreachable". The password inside the URL must be
+      # percent-encoded.
+      #
+      # The seed is deliberately not pushed: `--include-seed` would overwrite
+      # production rows with development fixtures.
+      - name: Push migrations
+        run: supabase db push --db-url "$SUPABASE_DB_URL"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
