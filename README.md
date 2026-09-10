@@ -50,5 +50,8 @@ returns every column of it, so any new customer-facing read goes through a view.
 
 ## Documentation
 
-- Design: `docs/superpowers/specs/2026-09-07-piscinas-reus-design.md`
-- Plans: `docs/superpowers/plans/`
+The design spec and the implementation plans are deliberately not in this
+repository. They are working documents for whoever is building the app, they
+change faster than the code they describe, and a stale copy of one is worse
+than no copy. They live on the author's machine under `docs/`, which
+`.gitignore` keeps out.
