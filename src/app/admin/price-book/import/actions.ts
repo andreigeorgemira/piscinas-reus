@@ -19,18 +19,50 @@ export type { ImportState, PreviewRow }
 const MAX_IMPORT_BYTES = 200 * 1024
 
 // PostgREST puts an `.in()` filter in the URL query string -- one
-// `code=in.(...)` parameter carrying every value -- so looking up a whole
-// catalogue's worth of codes in one request builds a URL past what a typical
-// gateway accepts, and the preview then fails with nothing on screen but
-// "no se pudo comprobar". The cap above would be unreachable long before it
-// was ever hit. Chunking keeps every URL short.
+// `code=in.(...)` parameter carrying every value -- so what these two
+// constants have to respect is a number of characters in a URL, not a
+// number of codes or names. Measured against this project's own local
+// gateway: it answers 200 up to about 7.2 KB of URL and 414 from about
+// 8.4 KB, and a 414 is a dead end here, since the only thing the screen can
+// then say is "no se pudo comprobar el tarifario".
 //
-// 500 also keeps each response inside PostgREST's own row cap (max_rows =
-// 1000, supabase/config.toml): `code` is unique, so a chunk of 500 codes
-// matches at most 500 rows. No chunk can come back silently truncated, which
-// is why this lookup needs none of the count check listPriceBook does (see
-// src/lib/price-book/queries.ts).
-const CODE_LOOKUP_CHUNK = 500
+//   100 codes x 40 chars (schema.ts's cap) -> 4371 chars, 200
+//   150 codes x 40 chars                   -> 6521 chars, 200
+//   200 codes x 40 chars                   -> 8671 chars, 414
+//    50 names x 80 chars (schema.ts's cap) -> 4227 chars, 200
+//    75 names x 80 chars                   -> 6302 chars, 200
+//   100 names x 80 chars                   -> 8377 chars, 414
+//
+// Both sizes are therefore set for the longest value the schema allows, not
+// for the short codes this company happens to use today -- supabase/seed.sql
+// writes seven-character ones, which is why no test caught the unchunked
+// version. They land near 4.3 KB, about half the ceiling. Forty serial
+// requests at the 200 KB paste cap above is a fine price for something that
+// only runs when staff paste a file.
+//
+// Still able to overflow: a value made entirely of multi-byte characters.
+// An 80-character name of accented letters percent-encodes to 480 URL
+// characters, and no fixed count survives that. A realistic Spanish name at
+// the cap (about ten accents in eighty characters) measures 4727 chars for
+// fifty of them, so it is a pathological input rather than a reachable one,
+// and it surfaces as the logged failure below rather than a wrong answer.
+//
+// 100 and 50 also keep each response inside PostgREST's own row cap
+// (max_rows = 1000, supabase/config.toml): `code` and `name` are both
+// unique, so a chunk matches at most as many rows as it carries values. No
+// chunk can come back silently truncated, which is why these lookups need
+// none of the count check listPriceBook does (src/lib/price-book/queries.ts).
+const CODE_LOOKUP_CHUNK = 100
+const GROUP_LOOKUP_CHUNK = 50
+
+/** Splits values into fixed-size chunks, in order. */
+function chunked<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let start = 0; start < values.length; start += size) {
+    chunks.push(values.slice(start, start + size))
+  }
+  return chunks
+}
 
 /**
  * Reads the pasted text off the form and says whether it is over the size
@@ -88,8 +120,7 @@ export async function previewImport(
   const codes = rows.flatMap((row) => (row.input.code === null ? [] : [row.input.code]))
 
   const existingCodes = new Set<string>()
-  for (let start = 0; start < codes.length; start += CODE_LOOKUP_CHUNK) {
-    const chunk = codes.slice(start, start + CODE_LOOKUP_CHUNK)
+  for (const chunk of chunked(codes, CODE_LOOKUP_CHUNK)) {
     const { data, error } = await supabase.from('price_book_items').select('code').in('code', chunk)
     if (error) {
       // The screen is only told the check failed, never why, and a chunked
@@ -149,17 +180,26 @@ async function resolveGroupIds(
     return { groupIdByName, groupsCreated: 0 }
   }
 
-  const { data: existing, error: selectError } = await supabase
-    .from('price_book_groups')
-    .select('id, name')
-    .in('name', groupNames)
+  // Chunked for the same reason previewImport's code lookup is: every name
+  // travels in the URL. Until that lookup was chunked this one was hidden
+  // behind it, because a file big enough to overflow here overflowed there
+  // first and never reached the commit. Now a file can preview cleanly, so
+  // this has to hold on its own -- failing at write time, after the staff
+  // member has read a preview and pressed Importar, is the worse of the two
+  // failures.
+  for (const chunk of chunked(groupNames, GROUP_LOOKUP_CHUNK)) {
+    const { data: existing, error: selectError } = await supabase
+      .from('price_book_groups')
+      .select('id, name')
+      .in('name', chunk)
 
-  if (selectError) {
-    return { error: describeWriteError(selectError) }
-  }
+    if (selectError) {
+      return { error: describeWriteError(selectError) }
+    }
 
-  for (const group of (existing ?? []) as { id: string; name: string }[]) {
-    groupIdByName.set(group.name, group.id)
+    for (const group of (existing ?? []) as { id: string; name: string }[]) {
+      groupIdByName.set(group.name, group.id)
+    }
   }
 
   const missingNames = groupNames.filter((name) => !groupIdByName.has(name))
