@@ -28,11 +28,16 @@ Vaso de gresite;m2;10,00;15,00;Revestimiento;REV-001;Revestimiento en gresite az
 Mano de obra;hora;12,00;18,00;Mano de obra;;`
 
 /**
- * Both forms below post to this one Server Function, which reads a hidden
- * `intent` field to pick previewImport or commitImport. One `useActionState`
- * this way means one `state`/`pending` pair drives the whole screen, rather
- * than two independent hooks whose results would need reconciling into a
- * single rendered view.
+ * A plain client function, NOT a Server Function: it runs in the browser and
+ * calls one of the two real Server Functions in ./actions (previewImport or
+ * commitImport) according to a hidden `intent` field both forms below post.
+ * The distinction is worth the words -- reading a client wrapper like this
+ * one as a Server Function is what put a 'use server' directive in a client
+ * module earlier in this phase, which breaks at runtime.
+ *
+ * One `useActionState` this way means one `state`/`pending` pair drives the
+ * whole screen, rather than two independent hooks whose results would need
+ * reconciling into a single rendered view.
  */
 async function runImport(previous: ImportState, formData: FormData): Promise<ImportState> {
   if (formData.get('intent') === 'commit') {
@@ -142,6 +147,16 @@ export function ImportForm() {
 
           <form action={formAction}>
             <input type="hidden" name="intent" value="commit" />
+            {/*
+              The previewed text, on purpose: `state.text` is what the server
+              parsed when Comprobar last ran, not what the textarea holds now
+              (it is uncontrolled, so a later edit never reaches this field).
+              That is what makes Importar write exactly the rows the table
+              above shows. Do not "fix" this into reading the textarea --
+              tests/e2e/price-book.spec.ts, 'commits what the preview showed,
+              not what the textarea holds when Importar is pressed', edits the
+              textarea after Comprobar and asserts the edit was not written.
+            */}
             <input type="hidden" name="text" value={state.text} />
             <button type="submit" disabled={pending} className={PRIMARY_BUTTON_CLASS}>
               {pending ? 'Importando…' : `Importar ${state.rows.length} conceptos`}

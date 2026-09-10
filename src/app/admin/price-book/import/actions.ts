@@ -18,6 +18,20 @@ export type { ImportState, PreviewRow }
 // denial-of-service vector.
 const MAX_IMPORT_BYTES = 200 * 1024
 
+// PostgREST puts an `.in()` filter in the URL query string -- one
+// `code=in.(...)` parameter carrying every value -- so looking up a whole
+// catalogue's worth of codes in one request builds a URL past what a typical
+// gateway accepts, and the preview then fails with nothing on screen but
+// "no se pudo comprobar". The cap above would be unreachable long before it
+// was ever hit. Chunking keeps every URL short.
+//
+// 500 also keeps each response inside PostgREST's own row cap (max_rows =
+// 1000, supabase/config.toml): `code` is unique, so a chunk of 500 codes
+// matches at most 500 rows. No chunk can come back silently truncated, which
+// is why this lookup needs none of the count check listPriceBook does (see
+// src/lib/price-book/queries.ts).
+const CODE_LOOKUP_CHUNK = 500
+
 /**
  * Reads the pasted text off the form and says whether it is over the size
  * cap. The text is returned either way (even when too large) so the caller
@@ -73,19 +87,26 @@ export async function previewImport(
 
   const codes = rows.flatMap((row) => (row.input.code === null ? [] : [row.input.code]))
 
-  let existingCodes = new Set<string>()
-  if (codes.length > 0) {
-    const { data, error } = await supabase.from('price_book_items').select('code').in('code', codes)
+  const existingCodes = new Set<string>()
+  for (let start = 0; start < codes.length; start += CODE_LOOKUP_CHUNK) {
+    const chunk = codes.slice(start, start + CODE_LOOKUP_CHUNK)
+    const { data, error } = await supabase.from('price_book_items').select('code').in('code', chunk)
     if (error) {
+      // The screen is only told the check failed, never why, and a chunked
+      // lookup has more ways to fail than a single one -- this log is the
+      // only diagnostic anyone will ever get for it.
+      console.error('price-book import preview lookup failed', error)
       return {
         ...idleImportState,
         text,
         error: 'No se pudo comprobar el tarifario. Inténtalo de nuevo.',
       }
     }
-    existingCodes = new Set(
-      ((data ?? []) as { code: string | null }[]).flatMap((row) => (row.code === null ? [] : [row.code])),
-    )
+    for (const row of (data ?? []) as { code: string | null }[]) {
+      if (row.code !== null) {
+        existingCodes.add(row.code)
+      }
+    }
   }
 
   const previewRows: PreviewRow[] = rows.map((row) => ({
@@ -218,6 +239,11 @@ export async function commitImport(
   if (codelessRows.length > 0) {
     const { error } = await supabase.from('price_book_items').insert(codelessRows)
     if (error) {
+      // The coded upsert above is a separate statement that has already
+      // committed -- these two writes are not one transaction. Revalidating
+      // before returning the failure stops /admin/price-book from serving a
+      // cached page missing rows this import really did write.
+      revalidatePath('/admin/price-book')
       return { ...idleImportState, text, issues, error: describeWriteError(error) }
     }
   }
