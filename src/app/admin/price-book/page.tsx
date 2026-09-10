@@ -41,6 +41,12 @@ export default async function PriceBookPage() {
           ← Panel
         </Link>
         <h1 className="text-2xl font-semibold">Tarifario</h1>
+        <Link
+          href="/admin/price-book/import"
+          className="w-fit text-sm underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 dark:focus-visible:outline-blue-400"
+        >
+          Importar desde CSV
+        </Link>
       </div>
 
       <NewGroupForm nextPosition={nextPosition} />
