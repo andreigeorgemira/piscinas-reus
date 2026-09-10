@@ -63,3 +63,9 @@ supabase/.temp/
 
 
 docs/*
+# Agent tooling. Skills, their symlinks and the lock file that installs them are
+# how this machine is set up to work on the app, not part of the app. They stay
+# on disk; git carries source, tests, migrations and CI.
+.agents/
+.claude/
+skills-lock.json
