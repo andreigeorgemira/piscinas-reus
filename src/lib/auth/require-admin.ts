@@ -31,11 +31,24 @@ export async function requireAdmin(): Promise<SupabaseClient> {
     redirect('/login?next=%2Fadmin')
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', user.id)
     .single()
+
+  if (error) {
+    // Logged, then deliberately fallen through to the redirect below. This
+    // is the single query that answers "is this person staff", and a
+    // failure here (a 42501 from a mis-scoped grant, a dropped connection,
+    // a missing profile row) leaves the question unanswered - which is not
+    // a yes, so the redirect must still happen. Failing open would hand the
+    // admin screens to whoever provoked the error. But the symptom of
+    // failing closed is every admin silently landing on /portal, and
+    // without this line there is nothing anywhere to read that explains it.
+    // src/lib/supabase/middleware.ts does the same for the page guard.
+    console.error('profiles role lookup failed in requireAdmin', error)
+  }
 
   if (profile?.role !== 'admin') {
     redirect('/portal')
