@@ -86,7 +86,7 @@ afterAll(resetDatabase)
 
 describe('listPriceBook', () => {
   it('orders groups by position with the ungrouped bucket last', async () => {
-    const groups = await listPriceBook(staff)
+    const { groups } = await listPriceBook(staff)
     expect(groups.map((g) => g.name)).toEqual([
       'Albanileria',
       'Revestimientos',
@@ -95,34 +95,34 @@ describe('listPriceBook', () => {
   })
 
   it('nests items under their group, ordered by code', async () => {
-    const groups = await listPriceBook(staff)
+    const { groups } = await listPriceBook(staff)
     const albanileria = groups.find((g) => g.name === 'Albanileria')!
     expect(albanileria.items.map((i) => i.code)).toEqual(['ALB-001', 'ALB-002'])
   })
 
   it('serialises prices as numbers, not strings', async () => {
-    const groups = await listPriceBook(staff)
+    const { groups } = await listPriceBook(staff)
     const item = groups.flatMap((g) => g.items)[0]!
     expect(typeof item.unitCost).toBe('number')
     expect(typeof item.unitPrice).toBe('number')
   })
 
   it('still returns a retired item', async () => {
-    const groups = await listPriceBook(staff)
+    const { groups } = await listPriceBook(staff)
     const albanileria = groups.find((g) => g.name === 'Albanileria')!
     const retired = albanileria.items.find((i) => i.code === 'ALB-001')
     expect(retired?.isActive).toBe(false)
   })
 
   it('gives the synthetic ungrouped bucket a null id', async () => {
-    const groups = await listPriceBook(staff)
+    const { groups } = await listPriceBook(staff)
     const ungrouped = groups.find((g) => g.name === UNGROUPED_NAME)!
     expect(ungrouped.id).toBeNull()
     expect(ungrouped.items.map((i) => i.name)).toEqual(['Suelto'])
   })
 
   it('returns nothing for a customer, since RLS matches no rows', async () => {
-    const groups = await listPriceBook(customer)
+    const { groups } = await listPriceBook(customer)
     expect(groups).toEqual([])
   })
 })
@@ -145,13 +145,58 @@ describe('listPriceBook ungrouped bucket', () => {
     await db.from('price_book_items').update({ group_id: groupId }).is('group_id', null)
 
     try {
-      const groups = await listPriceBook(staff)
+      const { groups } = await listPriceBook(staff)
       expect(groups.map((g) => g.name)).not.toContain(UNGROUPED_NAME)
     } finally {
       for (const row of ungroupedRows ?? []) {
         await db.from('price_book_items').update({ group_id: null }).eq('id', row.id)
       }
     }
+  })
+})
+
+describe('listPriceBook row cap', () => {
+  it('reports the total when the server truncates the item query', async () => {
+    // PostgREST returns at most max_rows rows (1000, supabase/config.toml)
+    // and neither query in listPriceBook paginates, so past that point the
+    // screen shows a slice. The counts are the only thing that says so --
+    // drop `count: 'exact'` and this is the test that notices.
+    const db = adminDb()
+    const marker = 'Cap fixture'
+    const bulk = Array.from({ length: 1001 }, (_, index) => ({
+      group_id: groupId,
+      code: `CAP-${String(index).padStart(4, '0')}`,
+      name: `${marker} ${index}`,
+      unit: 'unit' as const,
+      unit_cost: 1,
+      unit_price: 2,
+      is_active: true,
+    }))
+
+    const { error: insertError } = await db.from('price_book_items').insert(bulk)
+    if (insertError) throw insertError
+
+    try {
+      const listing = await listPriceBook(staff)
+      expect(listing.itemsTotal).toBeGreaterThan(1000)
+      expect(listing.itemsShown).toBe(1000)
+      expect(listing.itemsShown).toBeLessThan(listing.itemsTotal)
+      // Groups are nowhere near the cap, so their two numbers must agree --
+      // otherwise a screen could claim a truncation that never happened.
+      expect(listing.groupsShown).toBe(listing.groupsTotal)
+    } finally {
+      const { error: cleanupError } = await db
+        .from('price_book_items')
+        .delete()
+        .like('name', `${marker} %`)
+      if (cleanupError) throw cleanupError
+    }
+  })
+
+  it('reports equal counts for a catalogue the server returns whole', async () => {
+    const listing = await listPriceBook(staff)
+    expect(listing.itemsShown).toBe(listing.itemsTotal)
+    expect(listing.groupsShown).toBe(listing.groupsTotal)
   })
 })
 

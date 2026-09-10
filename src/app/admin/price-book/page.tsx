@@ -18,7 +18,15 @@ function lastPosition(groups: PriceBookGroup[]): number {
 
 export default async function PriceBookPage() {
   const supabase = await requireAdmin()
-  const groups = await listPriceBook(supabase)
+  const listing = await listPriceBook(supabase)
+  const { groups } = listing
+
+  // The server hands back at most 1000 rows per query and never says so on
+  // its own (see PriceBookListing). Beyond that this screen is showing a
+  // slice of the catalogue, and staff must be told which slice rather than
+  // be left to trust a page that quietly stops.
+  const truncated =
+    listing.itemsShown < listing.itemsTotal || listing.groupsShown < listing.groupsTotal
 
   // Only real groups can be chosen in a row's Grupo select: "Sin grupo" is not
   // a group, it is what group_id = null renders as, and the select already
@@ -48,6 +56,15 @@ export default async function PriceBookPage() {
           Importar desde CSV
         </Link>
       </div>
+
+      {truncated ? (
+        <p className="max-w-3xl rounded border border-amber-600 p-4 text-sm text-amber-800 dark:border-amber-500 dark:text-amber-300">
+          Esta pantalla muestra {listing.itemsShown} de {listing.itemsTotal} conceptos y{' '}
+          {listing.groupsShown} de {listing.groupsTotal} grupos: el servidor no devuelve más
+          de 1000 filas por consulta. El resto del tarifario sigue guardado, pero no se ve
+          aquí; para verlo entero hace falta una pantalla por páginas.
+        </p>
+      ) : null}
 
       <NewGroupForm nextPosition={nextPosition} />
 

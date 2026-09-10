@@ -23,6 +23,32 @@ export type PriceBookGroup = {
   items: PriceBookItem[]
 }
 
+/**
+ * What listPriceBook found, together with how much of it the server was
+ * willing to return.
+ *
+ * PostgREST caps every response at `max_rows` (1000 in
+ * supabase/config.toml, and 1000 is the hosted default too). Neither query
+ * in listPriceBook paginates, so a catalogue past that cap renders its
+ * first 1000 items - ordered by code - and, without these counts, would say
+ * nothing at all about the rest.
+ *
+ * Deliberately counts rather than pages: an invisible paging loop would
+ * make this screen slower for every company that will never hit the cap,
+ * and would hide the fact that a business with more than a thousand
+ * concepts needs a screen designed for that. A truncation the staff can see
+ * is honest, and is the thing that prompts the redesign.
+ */
+export type PriceBookListing = {
+  groups: PriceBookGroup[]
+  /** Items returned, and how many exist. Equal unless the cap bit. */
+  itemsShown: number
+  itemsTotal: number
+  /** Groups returned, and how many exist. Equal unless the cap bit. */
+  groupsShown: number
+  groupsTotal: number
+}
+
 type GroupRow = {
   id: string
   name: string
@@ -73,16 +99,22 @@ function toItem(row: ItemRow): PriceBookItem {
  * the desired behaviour: a caller that forgot to gate with requireAdmin
  * renders an empty page rather than an error that leaks the catalogue's shape.
  */
-export async function listPriceBook(supabase: SupabaseClient): Promise<PriceBookGroup[]> {
+export async function listPriceBook(supabase: SupabaseClient): Promise<PriceBookListing> {
+  // `count: 'exact'` is what makes the cap visible: PostgREST returns the
+  // full matching count in Content-Range even when it only hands back
+  // `max_rows` of them, so comparing the two is the only way this code can
+  // tell a complete answer from a truncated one. See PriceBookListing.
   const [groupsResult, itemsResult] = await Promise.all([
     supabase
       .from('price_book_groups')
-      .select('id, name, position')
+      .select('id, name, position', { count: 'exact' })
       .order('position')
       .order('name'),
     supabase
       .from('price_book_items')
-      .select('id, group_id, code, name, description, unit, unit_cost, unit_price, is_active')
+      .select('id, group_id, code, name, description, unit, unit_cost, unit_price, is_active', {
+        count: 'exact',
+      })
       .order('code', { nullsFirst: false })
       .order('name'),
   ])
@@ -105,6 +137,12 @@ export async function listPriceBook(supabase: SupabaseClient): Promise<PriceBook
       ungroupedItems.push(item)
       continue
     }
+    // `?.` drops the item when its group is not in the map. That is not
+    // merely defensive: the two queries above run under Promise.all, so a
+    // group deleted between them is absent from `groups` while its items
+    // (already reassigned to group_id null by `on delete set null`, or read
+    // a moment earlier) can still name it. Dropping one row from a screen
+    // the next refresh renders correctly beats throwing on the whole page.
     groups.get(item.groupId)?.items.push(item)
   }
 
@@ -119,5 +157,17 @@ export async function listPriceBook(supabase: SupabaseClient): Promise<PriceBook
     result.push({ id: null, name: UNGROUPED_NAME, position: 0, items: ungroupedItems })
   }
 
-  return result
+  const groupsShown = groupsResult.data.length
+  const itemsShown = itemsResult.data.length
+
+  return {
+    groups: result,
+    itemsShown,
+    // A null count means the server did not send one at all, not that the
+    // table is empty. Falling back to what did arrive keeps the caller from
+    // reporting a nonsensical "1000 of 0" truncation.
+    itemsTotal: itemsResult.count ?? itemsShown,
+    groupsShown,
+    groupsTotal: groupsResult.count ?? groupsShown,
+  }
 }
