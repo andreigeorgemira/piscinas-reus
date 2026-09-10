@@ -147,6 +147,29 @@ describe('parseImport', () => {
     ])
   })
 
+  it('reports that the header had a descripcion column', () => {
+    const text = [
+      'concepto;unidad;coste;precio;descripcion',
+      'Vaso de gresite;m2;10,00;15,00;Revestimiento en gresite azul',
+    ].join('\n')
+
+    const { columns } = parseImport(text)
+
+    expect(columns).toEqual({ description: true })
+  })
+
+  it('reports that the header had no descripcion column, distinct from every row leaving it blank', () => {
+    const text = ['concepto;unidad;coste;precio', 'Vaso de gresite;m2;10,00;15,00'].join('\n')
+
+    const { rows, columns } = parseImport(text)
+
+    expect(columns).toEqual({ description: false })
+    // The row's own description is null either way -- the file-level flag
+    // above is what tells commitImport apart a missing column from every
+    // row leaving that column blank.
+    expect(rows[0]?.input.description).toBeNull()
+  })
+
   it('accepts English column names', () => {
     const text = ['name;unit;cost;price', 'Peon;hour;12,00;18,00'].join('\n')
 
@@ -205,10 +228,12 @@ describe('parseImport', () => {
     expect(parseImport('')).toEqual({
       rows: [],
       issues: [{ line: 1, message: 'El archivo está vacío.' }],
+      columns: { description: false },
     })
     expect(parseImport('   \n  ')).toEqual({
       rows: [],
       issues: [{ line: 1, message: 'El archivo está vacío.' }],
+      columns: { description: false },
     })
   })
 

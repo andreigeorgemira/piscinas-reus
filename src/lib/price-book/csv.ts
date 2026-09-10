@@ -190,6 +190,18 @@ function resolveUnit(raw: string): string {
 const EMPTY_FILE_ISSUE: ImportIssue = { line: 1, message: 'El archivo está vacío.' }
 
 /**
+ * Which optional columns the file's header actually named. A coded row's
+ * upsert must not overwrite `description` from a file that never carried
+ * that column at all -- a missing column and a blank cell mean different
+ * things (leave untouched vs. clear on purpose), and that distinction only
+ * exists at the file level, not per row. See commitImport in
+ * src/app/admin/price-book/import/actions.ts.
+ */
+export type ImportColumns = { description: boolean }
+
+const NO_OPTIONAL_COLUMNS: ImportColumns = { description: false }
+
+/**
  * Parses a staff-exported price book CSV into rows validated against the
  * exact schema the forms use, plus a list of issues. A bad row is reported
  * by line number and does not stop the rest of the file from importing --
@@ -200,13 +212,15 @@ const EMPTY_FILE_ISSUE: ImportIssue = { line: 1, message: 'El archivo está vac�
  * resolving a name to an id is the caller's job, done at import time against
  * the database.
  */
-export function parseImport(text: string): { rows: ImportRow[]; issues: ImportIssue[] } {
+export function parseImport(
+  text: string,
+): { rows: ImportRow[]; issues: ImportIssue[]; columns: ImportColumns } {
   // Excel writes a BOM at the very start of the file, inside what becomes
   // the first header cell.
   const withoutBom = text.replace(/^\uFEFF/, '')
 
   if (withoutBom.trim() === '') {
-    return { rows: [], issues: [EMPTY_FILE_ISSUE] }
+    return { rows: [], issues: [EMPTY_FILE_ISSUE], columns: NO_OPTIONAL_COLUMNS }
   }
 
   const firstLineEnd = withoutBom.search(/\r\n|\r|\n/)
@@ -216,10 +230,12 @@ export function parseImport(text: string): { rows: ImportRow[]; issues: ImportIs
 
   const headerRow = table[0]
   if (headerRow === undefined) {
-    return { rows: [], issues: [EMPTY_FILE_ISSUE] }
+    return { rows: [], issues: [EMPTY_FILE_ISSUE], columns: NO_OPTIONAL_COLUMNS }
   }
 
   const columns = buildColumnIndex(headerRow)
+  const importColumns: ImportColumns = { description: columns.has('description') }
+
   const missingColumns = REQUIRED_COLUMNS.filter((column) => !columns.has(column.key))
   if (missingColumns.length > 0) {
     return {
@@ -228,6 +244,7 @@ export function parseImport(text: string): { rows: ImportRow[]; issues: ImportIs
         line: 1,
         message: `Falta la columna "${column.label}".`,
       })),
+      columns: importColumns,
     }
   }
 
@@ -290,5 +307,5 @@ export function parseImport(text: string): { rows: ImportRow[]; issues: ImportIs
     rows.push({ line, groupName, input: parsed.data })
   }
 
-  return { rows, issues }
+  return { rows, issues, columns: importColumns }
 }

@@ -67,7 +67,9 @@ export function ImportForm() {
           <strong>precio</strong> son obligatorias; <strong>grupo</strong>,{' '}
           <strong>código</strong> y <strong>descripción</strong> son opcionales. Un
           concepto con código actualiza el que ya exista con ese código; uno sin código
-          siempre se añade como nuevo.
+          siempre se añade como nuevo. Si el archivo no tiene columna descripción, la
+          descripción ya guardada no se toca. Importar un concepto retirado no lo
+          reactiva: hay que reactivarlo a mano desde el tarifario.
         </p>
         <label htmlFor={textareaId} className="text-sm font-medium">
           Pega aquí el CSV, o el bloque de celdas copiado desde Excel

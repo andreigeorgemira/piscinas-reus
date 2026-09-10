@@ -5,6 +5,7 @@ import type { PostgrestError } from '@supabase/supabase-js'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { parseImport, type ImportRow } from '@/lib/price-book/csv'
 import { itemInputToRow, type ItemInput } from '@/lib/price-book/schema'
+import { codedItemPayload } from './coded-item-payload'
 import { idleImportState, type ImportState, type PreviewRow } from './import-state'
 
 // Re-exported so callers still read the contract off this module. Only the
@@ -171,7 +172,9 @@ async function resolveGroupIds(
  * safe to re-run, since it lands on the same row instead of duplicating it.
  * Codeless rows have no identity to match on, so they are always inserted
  * and will duplicate on a second run; the screen warns about this rather
- * than the action guessing at a match.
+ * than the action guessing at a match. Codeless rows are always brand new,
+ * so they keep every field itemInputToRow produces -- there is nothing
+ * existing for them to overwrite.
  */
 export async function commitImport(
   _previous: ImportState,
@@ -184,7 +187,7 @@ export async function commitImport(
     return { ...idleImportState, text, error: TOO_LARGE_MESSAGE }
   }
 
-  const { rows, issues } = parseImport(text)
+  const { rows, issues, columns } = parseImport(text)
 
   const resolved = await resolveGroupIds(supabase, rows)
   if ('error' in resolved) {
@@ -192,17 +195,16 @@ export async function commitImport(
   }
   const { groupIdByName, groupsCreated } = resolved
 
-  const codedRows: ReturnType<typeof itemInputToRow>[] = []
+  const codedRows: Record<string, unknown>[] = []
   const codelessRows: ReturnType<typeof itemInputToRow>[] = []
 
   for (const row of rows) {
     const groupId = row.groupName === null ? null : groupIdByName.get(row.groupName) ?? null
     const input: ItemInput = { ...row.input, groupId }
-    const record = itemInputToRow(input)
     if (input.code === null) {
-      codelessRows.push(record)
+      codelessRows.push(itemInputToRow(input))
     } else {
-      codedRows.push(record)
+      codedRows.push(codedItemPayload(input, columns.description))
     }
   }
 
