@@ -52,7 +52,13 @@ export function parseCsv(text: string, delimiter: string): string[][] {
       continue
     }
 
-    if (char === '"') {
+    if (char === '"' && field === '') {
+      // A quote only opens a quoted field when it is the FIRST character of
+      // that field. A quote appearing after other characters (a diameter
+      // written '1" PVC', a straight quote pasted mid-word) is not RFC 4180
+      // field-opening -- treating it as one flips the machine into quote mode
+      // with no way back except another '"' turning up later in the file,
+      // silently swallowing every delimiter and newline in between.
       inQuotes = true
       i += 1
       continue

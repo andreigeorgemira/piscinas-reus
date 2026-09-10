@@ -68,6 +68,40 @@ describe('parseCsv', () => {
   it('returns no rows at all for an empty string', () => {
     expect(parseCsv('', ',')).toEqual([])
   })
+
+  it('treats a non-leading quote as literal text, not a field-opener', () => {
+    // Pipe/fitting diameters are conventionally written with a bare inch
+    // mark ('1", 2"'). A quote is only field-opening as the FIRST character
+    // of a field -- one appearing after other characters is real content,
+    // not RFC 4180 quoting, and must not flip the machine into quote mode
+    // (which would otherwise swallow every delimiter and newline that
+    // follows, until another '"' happens to turn up later in the file).
+    expect(parseCsv('Tubo "1 PVC,m2,10,15\nOtro,m2,10,20\n', ',')).toEqual([
+      ['Tubo "1 PVC', 'm2', '10', '15'],
+      ['Otro', 'm2', '10', '20'],
+    ])
+  })
+
+  it('does not let a mid-field quote merge the following row into the same cell', () => {
+    // A second, deliberately-quoted field later in the file (the ',' inside
+    // '20,00' needs escaping under a comma delimiter) must resync and parse
+    // as its own row -- the earlier bare quote must not have left the
+    // machine in quote mode by the time this row is reached.
+    expect(
+      parseCsv('Codo 1" PVC,m2,10,15\nValvula,unidad,"20,00",25\n', ','),
+    ).toEqual([
+      ['Codo 1" PVC', 'm2', '10', '15'],
+      ['Valvula', 'unidad', '20,00', '25'],
+    ])
+  })
+
+  it('terminates on an unterminated quote at EOF instead of losing everything before it', () => {
+    // The opening quote here IS field-opening (it is the first character of
+    // its field), so quote mode is entered legitimately and never closes.
+    // The parser must still reach EOF and flush what it has, rather than
+    // hanging or discarding the row that was already complete.
+    expect(parseCsv('a,"b\n', ',')).toEqual([['a', 'b\n']])
+  })
 })
 
 describe('parseImport', () => {
@@ -210,6 +244,21 @@ describe('parseImport', () => {
       [2, 'A'],
       [4, 'B'],
     ])
+  })
+
+  it('keeps a following row intact when an earlier row has a non-leading quote in a cell', () => {
+    const text = [
+      'concepto;unidad;coste;precio',
+      'Codo 1" PVC;m2;10,00;15,00',
+      'Valvula;ud.;20,00;25,00',
+    ].join('\n')
+
+    const { rows, issues } = parseImport(text)
+
+    expect(issues).toEqual([])
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({ line: 2, input: { name: 'Codo 1" PVC' } })
+    expect(rows[1]).toMatchObject({ line: 3, input: { name: 'Valvula', unit: 'unit' } })
   })
 
   it('strips a leading BOM from the header before matching columns', () => {
