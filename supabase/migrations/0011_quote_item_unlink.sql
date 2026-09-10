@@ -61,6 +61,20 @@
 -- fail, the same way removing client_selected's own clause fails its
 -- counterpart in immutability.test.ts.
 --
+-- Restated from 0009_quote_immutability.sql, because that warning now lives
+-- in a superseded file while this one is the live definition - and this one
+-- doubles the number of places it applies, from one whole-row jsonb
+-- comparison to two. quote_items has no updated_at column and carries no
+-- other row trigger today, so both comparisons below are safe as written.
+-- If an updated_at column and a touch_updated_at trigger (see
+-- 0001_core_schema.sql) are ever added to this table, firing order becomes
+-- load-bearing: quote_items_guard_status sorts alphabetically before
+-- quote_items_touch_updated_at, so this guard would run first and see the
+-- row before updated_at changes - correct, but by luck of trigger-name
+-- ordering rather than by design. Whoever adds that trigger should read
+-- this paragraph and both `to_jsonb(new) ... = to_jsonb(old) ...` clauses
+-- below, and pick the trigger's name deliberately.
+--
 -- The trigger quote_items_guard_status (0009_quote_immutability.sql) binds
 -- to this function by name and does not need recreating; `create or
 -- replace function` swaps the body under it in place. Grants are likewise

@@ -1,3 +1,11 @@
+-- SUPERSEDED FUNCTION BODY: 0011_quote_item_unlink.sql holds the live
+-- definition of guard_quote_item_edit(). It replaces the body below with
+-- `create or replace function`, restating every carve-out written here and
+-- adding one more (a catalogue item's `on delete set null` unlink). Read
+-- 0011 to understand the guard as it actually runs today; what follows is
+-- how it started. The trigger created at the end of this file is still the
+-- live trigger - 0011 rebinds nothing.
+--
 -- A quote leaves the office when it is sent. From that moment its lines are
 -- frozen, so the figure the client is looking at cannot change underneath
 -- them. Returning the quote to draft reopens it and invalidates the link.
@@ -38,11 +46,17 @@
 -- green. The null-parent half below IS covered - see "refuses a line whose
 -- parent quote does not exist" in tests/integration/immutability.test.ts.
 --
--- This file was amended in place after it had already been applied locally
--- (it had never reached the hosted project). `supabase migration up` will
--- not replay an applied migration, so a database created before that
--- amendment keeps the old, weaker function and still passes the suite. Run
--- `npx supabase db reset` if yours predates it.
+-- Do not amend this file. It is applied on the hosted production database
+-- (Plan 1 shipped: PR #1 merged, and the site is live on the schema this
+-- migration produced). Supabase records applied migrations by version and
+-- never replays one, so an edit to a statement here would only ever reach a
+-- local database on `npx supabase db reset`, while the hosted project kept
+-- the old definition - the same hosted/local divergence
+-- 0010_table_grants.sql exists to close. An earlier revision of this header
+-- said the opposite: that the file had been amended in place and had never
+-- reached the hosted project. That was false on both counts, and following
+-- it produced commit 11ec937 and its revert 8e8d8ff. An applied migration
+-- is fixed with a new, sequenced one, the way 0007, 0010 and 0011 each do.
 create or replace function public.guard_quote_item_edit()
 returns trigger
 language plpgsql
