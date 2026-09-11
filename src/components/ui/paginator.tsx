@@ -3,9 +3,28 @@ import { PageSizeSelect } from './page-size-select'
 
 export const PAGE_SIZES = [10, 25, 50]
 
-const LINK_CLASS =
-  'flex h-7 items-center rounded-md border border-line bg-surface px-2.5 text-xs text-ink-soft transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
-const DEAD_CLASS = 'flex h-7 items-center rounded-md border border-line px-2.5 text-xs text-faint'
+const ARROW_CLASS =
+  'flex size-7 items-center justify-center rounded-md border border-line bg-surface text-ink-soft transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
+const ARROW_DEAD_CLASS =
+  'flex size-7 items-center justify-center rounded-md border border-transparent text-faint/50'
+
+function Arrow({ direction }: { direction: 'previous' | 'next' }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {direction === 'previous' ? <path d="M9.8 3.6 5.4 8l4.4 4.4" /> : <path d="M6.2 3.6 10.6 8l-4.4 4.4" />}
+    </svg>
+  )
+}
 
 /**
  * The pager every list screen uses: what is on screen, how many there are,
@@ -52,23 +71,35 @@ export function Paginator({
         <PageSizeSelect value={pageSize} options={sizeHrefs} />
 
         {pageCount > 1 ? (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             {pageHrefs.previous ? (
-              <Link href={pageHrefs.previous} className={LINK_CLASS}>
-                Anterior
+              <Link
+                href={pageHrefs.previous}
+                aria-label="Página anterior"
+                className={ARROW_CLASS}
+              >
+                <Arrow direction="previous" />
               </Link>
             ) : (
-              <span className={DEAD_CLASS}>Anterior</span>
+              <span className={ARROW_DEAD_CLASS} aria-hidden="true">
+                <Arrow direction="previous" />
+              </span>
             )}
-            <span className="num flex h-7 items-center rounded-md border border-line bg-surface px-2.5 text-xs text-ink-soft">
+
+            {/* Plain text, not a bordered box: it reports the position, it
+                is not somewhere to type one. */}
+            <span className="num px-1.5 text-2xs text-muted">
               {page} / {pageCount}
             </span>
+
             {pageHrefs.next ? (
-              <Link href={pageHrefs.next} className={LINK_CLASS}>
-                Siguiente
+              <Link href={pageHrefs.next} aria-label="Página siguiente" className={ARROW_CLASS}>
+                <Arrow direction="next" />
               </Link>
             ) : (
-              <span className={DEAD_CLASS}>Siguiente</span>
+              <span className={ARROW_DEAD_CLASS} aria-hidden="true">
+                <Arrow direction="next" />
+              </span>
             )}
           </div>
         ) : null}

@@ -125,3 +125,61 @@ export const THEME_OPTIONS: { value: Theme; label: string; icon: ReactNode }[] =
     ),
   },
 ]
+
+/**
+ * The theme choice as one control: three labels in a track, with the
+ * selected one under a thumb that slides.
+ *
+ * Three separate buttons were three things to read and no indication that
+ * they were the same question. A radiogroup says it is one choice, and the
+ * thumb moving from cell to cell says which way the choice went -- the
+ * motion is the feedback, so the popover does not need to repeat it in
+ * words.
+ */
+export function ThemeSlider() {
+  const theme = useThemeChoice()
+  const index = Math.max(
+    0,
+    THEME_OPTIONS.findIndex((option) => option.value === theme),
+  )
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Tema"
+      className="relative grid grid-cols-3 rounded-lg border border-line bg-surface-sunk p-1"
+    >
+      {/*
+        One third of the track minus the padding, slid a whole cell at a
+        time. `transform` rather than `left` so the browser animates it on
+        the compositor and it cannot nudge the labels around.
+      */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-1 left-1 rounded-md bg-surface shadow-card transition-transform duration-200 ease-out motion-reduce:transition-none"
+        style={{
+          width: 'calc((100% - 0.5rem) / 3)',
+          transform: `translateX(${index * 100}%)`,
+        }}
+      />
+      {THEME_OPTIONS.map((option) => {
+        const active = option.value === theme
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => setThemeChoice(option.value)}
+            className={`relative z-10 flex h-7 items-center justify-center gap-1.5 rounded-md text-2xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+              active ? 'text-ink' : 'text-muted hover:text-ink'
+            }`}
+          >
+            <span className="flex size-3.5 items-center justify-center">{option.icon}</span>
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}

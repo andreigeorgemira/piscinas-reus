@@ -55,12 +55,15 @@ export function GroupSection({
   group,
   groups,
   paginated,
+  filtering,
   groupHref,
 }: {
   group: PriceBookGroup
   groups: GroupOption[]
   /** True when the catalogue runs to more than one page. */
   paginated: boolean
+  /** True when a search or a filter is narrowing the screen. */
+  filtering: boolean
   /** Address that filters the screen down to this group alone. */
   groupHref: string
 }) {
@@ -157,6 +160,15 @@ export function GroupSection({
     })
   }
 
+  /**
+   * Unfiltered, the honest number is the group's own total: the page is only
+   * deciding which rows are visible, not which exist. Under a filter it is
+   * the rows on this page, because the total would be a count of concepts
+   * the screen is deliberately not showing.
+   */
+  const shownCount = filtering ? group.items.length : group.itemCount
+  const offPage = !filtering && group.itemCount > group.items.length
+
   const renameError = renameState.session === renaming.session ? renameState.error : null
   const addError = addState.session === adding.session ? addState.error : null
 
@@ -184,11 +196,19 @@ export function GroupSection({
           acceptDrop(itemId)
         }}
       >
-        <tr className="bg-surface-sunk">
+        <tr
+          className={
+            open
+              ? 'bg-surface-sunk'
+              : 'bg-surface transition-colors hover:bg-surface-hover'
+          }
+        >
           <th
             scope="colgroup"
             colSpan={ITEM_TABLE_COLUMN_COUNT}
-            className="border-y border-line px-2 py-1.5 text-left font-medium"
+            className={`px-2 py-1.5 text-left font-medium ${
+              open ? 'border-y border-line' : 'border-b border-line-soft'
+            }`}
           >
             <div className="flex items-center gap-1.5">
               <button
@@ -212,9 +232,15 @@ export function GroupSection({
                   about a group whose concepts are on the next one. When
                   there are none here, the row below says so in words.
                 */}
-                {group.items.length > 0 ? (
+                {!open && shownCount > 0 ? (
+                  <span className="text-2xs font-normal tracking-normal text-muted normal-case">
+                    <span className="num">{shownCount}</span>{' '}
+                    {shownCount === 1 ? 'concepto' : 'conceptos'}
+                  </span>
+                ) : null}
+                {open && shownCount > 0 ? (
                   <span className="num rounded-full bg-surface px-1.5 text-2xs text-muted">
-                    {group.items.length}
+                    {shownCount}
                   </span>
                 ) : null}
               </button>
@@ -368,7 +394,7 @@ export function GroupSection({
               wide as the table. The stacking happens in a div inside it.
             */}
             <td colSpan={ITEM_TABLE_COLUMN_COUNT} className="border-b border-line-soft p-0">
-              <div className="flex flex-col items-start">
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2">
                 {/*
                 The way to add a concept is at the END of the group, where
                 the last row is and where the eye already is after reading
@@ -378,16 +404,18 @@ export function GroupSection({
                   type="button"
                   aria-label={`Añadir concepto a ${group.name}`}
                   onClick={() => setAdding(true)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
+                  className="flex items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs text-muted transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
                 >
                   <svg {...ICON_PROPS} strokeWidth={1.8} className="text-faint">
                     <path d="M8 3.4v9.2M3.4 8h9.2" />
                   </svg>
                   {group.items.length > 0
                     ? 'Añadir concepto'
-                    : paginated
-                      ? 'Sin conceptos de este grupo en esta página. Añadir uno'
-                      : 'Este grupo no tiene conceptos. Añade el primero.'}
+                    : offPage
+                      ? `Sus ${group.itemCount} conceptos están en otras páginas. Añadir uno`
+                      : paginated
+                        ? 'Sin conceptos de este grupo en esta página. Añadir uno'
+                        : 'Este grupo no tiene conceptos. Añade el primero.'}
                 </button>
                 {/*
                 A group whose concepts all sit on another page must not be
@@ -397,8 +425,11 @@ export function GroupSection({
                 {group.items.length === 0 && paginated ? (
                   <a
                     href={groupHref}
-                    className="px-3 pb-2 text-xs text-accent underline underline-offset-2"
+                    className="flex h-6 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-2xs text-ink-soft transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   >
+                    <svg {...ICON_PROPS} width={11} height={11} className="text-faint">
+                      <path d="M2.4 3.6h11.2L9.4 8.4v4.2l-2.8 1.4V8.4Z" />
+                    </svg>
                     Ver solo este grupo
                   </a>
                 ) : null}
@@ -415,9 +446,9 @@ export function GroupSection({
           title={`Borrar el grupo «${group.name}»`}
           description="El grupo desaparece del tarifario. Sus conceptos no."
           risks={[
-            group.items.length === 0
+            group.itemCount === 0
               ? 'Este grupo no tiene ningún concepto, así que no se mueve nada.'
-              : `Sus ${group.items.length} conceptos pasan a «Sin grupo» y siguen ahí con su código y su precio.`,
+              : `Sus ${group.itemCount} conceptos pasan a «Sin grupo» y siguen ahí con su código y su precio.`,
             'Los presupuestos ya hechos no cambian: cada línea guardó el nombre del grupo cuando se escribió.',
             'Para volver a tenerlo habría que crear el grupo otra vez y arrastrar los conceptos de vuelta.',
           ]}

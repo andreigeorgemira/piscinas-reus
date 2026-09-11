@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { signOut } from '@/app/auth/actions'
-import { setThemeChoice, THEME_OPTIONS, useThemeChoice } from '@/app/theme'
+import { ThemeSlider } from '@/app/theme'
 import { Popover, PopoverContent, PopoverItem, PopoverTrigger } from '@/components/ui/popover'
 import { ProfileDialog } from './profile-dialog'
 
@@ -40,7 +40,6 @@ function initials(user: AdminUser): string {
  */
 export function UserMenu({ user, collapsed }: { user: AdminUser; collapsed: boolean }) {
   const [profileOpen, setProfileOpen] = useState(false)
-  const theme = useThemeChoice()
 
   const name = user.fullName.trim() || user.email
   const role = ROLE_LABELS[user.role] ?? user.role
@@ -117,37 +116,11 @@ export function UserMenu({ user, collapsed }: { user: AdminUser; collapsed: bool
             </PopoverItem>
           </div>
 
-          <div className="border-t border-line py-1">
-            <span className="block px-2.5 py-1 text-2xs font-medium tracking-[0.06em] text-faint uppercase">
+          <div className="flex flex-col gap-1.5 border-t border-line px-2.5 py-2.5">
+            <span className="text-2xs font-medium tracking-[0.06em] text-faint uppercase">
               Tema
             </span>
-            {THEME_OPTIONS.map((option) => (
-              <PopoverItem
-                key={option.value}
-                icon={option.icon}
-                onClick={() => setThemeChoice(option.value)}
-              >
-                <span className="flex w-full items-center">
-                  {option.label}
-                  {theme === option.value ? (
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="ml-auto text-accent"
-                      aria-hidden="true"
-                    >
-                      <path d="m3.2 8.4 3.2 3.2 6.4-6.8" />
-                    </svg>
-                  ) : null}
-                </span>
-              </PopoverItem>
-            ))}
+            <ThemeSlider />
           </div>
 
           <div className="border-t border-line py-1">

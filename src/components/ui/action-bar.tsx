@@ -1,7 +1,14 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+  type ReactNode,
+} from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 
 /**
@@ -13,6 +20,24 @@ import { Popover, PopoverContent, PopoverTrigger } from './popover'
  * fixed id collides with nothing.
  */
 export const ACTION_BAR_FORM_ID = 'action-bar-form'
+
+/**
+ * How to spell the shortcut on this machine.
+ *
+ * Read through useSyncExternalStore rather than set from an effect: the
+ * server cannot know the platform, so it renders the Mac spelling and the
+ * first client read corrects it before anything is painted. The subscribe
+ * function never fires -- the platform does not change mid-session.
+ */
+const NO_OP_SUBSCRIBE = () => () => {}
+
+function useShortcutHint(): string {
+  return useSyncExternalStore(
+    NO_OP_SUBSCRIBE,
+    () => (/Mac|iPhone|iPad/.test(navigator.platform) ? '\u2318K' : 'Ctrl K'),
+    () => '\u2318K',
+  )
+}
 
 /**
  * The strip a list screen is searched and filtered from.
@@ -67,6 +92,7 @@ export function ActionBar({
   const [searching, startNavigation] = useTransition()
   const typed = useRef(false)
   const input = useRef<HTMLInputElement>(null)
+  const shortcutHint = useShortcutHint()
 
   /**
    * Searching as you type, a second after you stop.
@@ -95,20 +121,13 @@ export function ActionBar({
   }, [term, action, searchName, searchParams, router])
 
   /**
-   * `/` jumps to the search box, the way it does in every tool staff already
-   * use. Ignored while they are typing somewhere else, which is what stops
-   * it from swallowing a slash in a concept name.
+   * Cmd+K, or Ctrl+K away from a Mac: the shortcut every tool with a search
+   * box uses. A bare key would be caught mid-word -- a slash is a character
+   * people type into a concept name -- so it takes a modifier.
    */
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return
-      const active = document.activeElement
-      const typing =
-        active instanceof HTMLInputElement ||
-        active instanceof HTMLTextAreaElement ||
-        active instanceof HTMLSelectElement ||
-        (active instanceof HTMLElement && active.isContentEditable)
-      if (typing) return
+      if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey)) return
       event.preventDefault()
       input.current?.focus()
       input.current?.select()
@@ -203,8 +222,8 @@ export function ActionBar({
                 </svg>
               </button>
             ) : (
-              <kbd className="num hidden shrink-0 rounded border border-line bg-surface px-1.5 text-2xs text-faint sm:block">
-                /
+              <kbd className="hidden shrink-0 rounded border border-line bg-surface px-1.5 text-2xs whitespace-nowrap text-faint sm:block">
+                {shortcutHint}
               </kbd>
             )}
           </div>

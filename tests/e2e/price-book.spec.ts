@@ -70,6 +70,17 @@ test.beforeAll(async () => {
   if (client.error) throw client.error
 })
 
+/**
+ * Creating a group is a disclosure at the foot of the catalogue now: the
+ * button opens the field, the field takes the name, and the position fills
+ * itself in.
+ */
+async function createGroup(page: Page, name: string) {
+  await page.getByRole('button', { name: 'Nuevo grupo' }).click()
+  await page.getByLabel('Nombre del grupo').fill(name)
+  await page.getByRole('button', { name: 'Crear grupo' }).click()
+}
+
 async function loginAsStaff(page: Page) {
   await page.goto('/login')
   await page.getByLabel('Correo electrónico').fill(staffEmail)
@@ -102,8 +113,7 @@ test('creates a group, adds a concept and edits its price inline', async ({ page
   const itemName = `Concepto E2E ${runId}`
   const itemCode = `E2E-${runId}`
 
-  await page.getByLabel('Nuevo grupo').fill(groupName)
-  await page.getByRole('button', { name: 'Crear grupo' }).click()
+  await createGroup(page, groupName)
 
   // The section is a named region only once React has mounted it with its
   // heading, which is exactly what makes it addressable without a CSS class.
@@ -145,8 +155,7 @@ test('reports a duplicate code in Spanish instead of crashing', async ({ page })
   const firstName = `Primero ${runId}`
   const secondName = `Segundo ${runId}`
 
-  await page.getByLabel('Nuevo grupo').fill(groupName)
-  await page.getByRole('button', { name: 'Crear grupo' }).click()
+  await createGroup(page, groupName)
 
   const region = page.getByRole('rowgroup', { name: groupName })
   await region.getByRole('button', { name: `Añadir concepto a ${groupName}` }).click()
@@ -516,7 +525,7 @@ test('pages through a catalogue too big for one screen', async ({ page }) => {
     const firstCode = `FILL-${runId}-0000`
     await expect(page.getByRole('cell', { name: firstCode, exact: true })).toBeVisible()
 
-    await pager.getByRole('link', { name: 'Siguiente' }).click()
+    await pager.getByRole('link', { name: 'Página siguiente' }).click()
 
     // A different page, not the same one re-rendered: page two starts where
     // page one stopped, and the row that opened page one is gone from it.
@@ -540,8 +549,7 @@ test('finds a concept by code and keeps the search in the address', async ({ pag
   await loginAsStaff(page)
   await page.goto('/admin/price-book')
 
-  await page.getByLabel('Nuevo grupo').fill(groupName)
-  await page.getByRole('button', { name: 'Crear grupo' }).click()
+  await createGroup(page, groupName)
 
   const region = page.getByRole('rowgroup', { name: groupName })
   await region.getByRole('button', { name: `Añadir concepto a ${groupName}` }).click()

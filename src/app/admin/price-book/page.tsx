@@ -369,6 +369,7 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
                 group={section}
                 groups={listing.allGroups}
                 paginated={listing.pageCount > 1}
+                filtering={filtering}
                 groupHref={href(query, {
                   group: section.id ?? UNGROUPED_FILTER,
                   page: 1,

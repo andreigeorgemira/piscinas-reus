@@ -26,11 +26,19 @@ export type PriceBookGroup = {
   id: string | null
   name: string
   position: number
+  /** The items on THIS page. */
   items: PriceBookItem[]
+  /**
+   * How many concepts the group holds in total, whatever this page shows.
+   * A folded group is a one-line summary of itself, and "3" when the group
+   * has ten and seven are on page two is not a summary, it is a wrong
+   * number.
+   */
+  itemCount: number
 }
 
 /** A group as the filter chips and the row selects need it. */
-export type PriceBookGroupRef = { id: string; name: string }
+export type PriceBookGroupRef = { id: string; name: string; itemCount: number }
 
 /** Which side of `is_active` a listing wants. */
 export type ActiveFilter = 'all' | 'active' | 'retired'
@@ -81,6 +89,12 @@ type GroupRow = {
   id: string
   name: string
   position: number
+  /**
+   * PostgREST returns an embedded aggregate as a one-element array. An empty
+   * group still comes back, with `[{ count: 0 }]` -- unlike embedding the
+   * rows themselves, which drops it (see listPriceBook).
+   */
+  price_book_items: { count: number }[]
 }
 
 type ItemRow = {
@@ -201,7 +215,11 @@ export async function listPriceBook(
   }
 
   const [groupsResult, itemsResult] = await Promise.all([
-    supabase.from('price_book_groups').select('id, name, position').order('position').order('name'),
+    supabase
+      .from('price_book_groups')
+      .select('id, name, position, price_book_items(count)')
+      .order('position')
+      .order('name'),
     itemsQuery.order('code', { nullsFirst: false }).order('name').range(from, from + pageSize - 1),
   ])
 
@@ -211,7 +229,16 @@ export async function listPriceBook(
   const groupRows = groupsResult.data as GroupRow[]
 
   const groups = new Map<string, PriceBookGroup>(
-    groupRows.map((row) => [row.id, { id: row.id, name: row.name, position: row.position, items: [] }]),
+    groupRows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        name: row.name,
+        position: row.position,
+        items: [],
+        itemCount: row.price_book_items[0]?.count ?? 0,
+      },
+    ]),
   )
 
   const ungroupedItems: PriceBookItem[] = []
@@ -239,7 +266,16 @@ export async function listPriceBook(
   // here is a placeholder no caller reads (the group section UI never offers
   // a rename control for `id === null`).
   if (ungroupedItems.length > 0) {
-    result.push({ id: null, name: UNGROUPED_NAME, position: 0, items: ungroupedItems })
+    result.push({
+      id: null,
+      name: UNGROUPED_NAME,
+      position: 0,
+      items: ungroupedItems,
+      // The bucket has no row to count from, and counting it would cost a
+      // query to tell staff something the page already shows. Callers that
+      // need a total treat 0 as "not known" for the ungrouped bucket.
+      itemCount: ungroupedItems.length,
+    })
   }
 
   const itemsShown = itemsResult.data.length
@@ -250,7 +286,11 @@ export async function listPriceBook(
 
   return {
     groups: result,
-    allGroups: groupRows.map((row) => ({ id: row.id, name: row.name })),
+    allGroups: groupRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      itemCount: row.price_book_items[0]?.count ?? 0,
+    })),
     itemsShown,
     itemsTotal,
     page,
