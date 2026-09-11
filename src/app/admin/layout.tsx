@@ -1,7 +1,8 @@
 import { cookies } from 'next/headers'
 import { AdminProviders } from '@/components/ui/providers'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { Sidebar, SIDEBAR_COOKIE } from './sidebar'
+import { Sidebar } from './sidebar'
+import { SIDEBAR_COOKIE } from './sidebar-cookie'
 import type { AdminUser } from './user-menu'
 
 /**
