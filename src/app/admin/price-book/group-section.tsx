@@ -1,54 +1,43 @@
-"use client";
+'use client'
 
-import {
-  startTransition,
-  useActionState,
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
-import { toast } from "sonner";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Tooltip } from "@/components/ui/tooltip";
-import type { PriceBookGroup } from "@/lib/price-book/queries";
-import { idleState, type ActionState } from "./action-state";
-import { createItem, deleteGroup, moveItem, updateGroup } from "./actions";
-import { DRAG_MIME } from "./drag";
-import {
-  CELL_CLASS,
-  ITEM_TABLE_COLUMN_COUNT,
-  ItemFields,
-  type GroupOption,
-} from "./item-fields";
-import { ItemRow } from "./item-row";
+import { startTransition, useActionState, useEffect, useRef, useState, useTransition } from 'react'
+import { toast } from 'sonner'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Tooltip } from '@/components/ui/tooltip'
+import type { PriceBookGroup } from '@/lib/price-book/queries'
+import { idleState, type ActionState } from './action-state'
+import { createItem, deleteGroup, moveItem, updateGroup } from './actions'
+import { DRAG_MIME } from './drag'
+import { useGroupsOpenRequest } from './groups-open'
+import { CELL_CLASS, ITEM_TABLE_COLUMN_COUNT, ItemFields, type GroupOption } from './item-fields'
+import { ItemRow } from './item-row'
 import {
   BUTTON_CLASS,
   DANGER_ICON_BUTTON_CLASS,
   FIELD_CLASS,
   ICON_BUTTON_CLASS,
   PRIMARY_BUTTON_CLASS,
-} from "./ui";
+} from './ui'
 
 const ICON_PROPS = {
   width: 14,
   height: 14,
-  viewBox: "0 0 16 16",
-  fill: "none",
-  stroke: "currentColor",
+  viewBox: '0 0 16 16',
+  fill: 'none',
+  stroke: 'currentColor',
   strokeWidth: 1.5,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-  "aria-hidden": true,
-} as const;
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  'aria-hidden': true,
+} as const
 
 /**
  * What an action returned, plus which opening of the form asked for it. See
  * the same shape in item-row.tsx for why the session stamp is there.
  */
-type FormState = ActionState & { session: number };
+type FormState = ActionState & { session: number }
 
-const idleFormState: FormState = { ...idleState, session: -1 };
+const idleFormState: FormState = { ...idleState, session: -1 }
 
 /**
  * One group of the catalogue, as a rowgroup of the single price-book table.
@@ -68,121 +57,131 @@ export function GroupSection({
   paginated,
   groupHref,
 }: {
-  group: PriceBookGroup;
-  groups: GroupOption[];
+  group: PriceBookGroup
+  groups: GroupOption[]
   /** True when the catalogue runs to more than one page. */
-  paginated: boolean;
+  paginated: boolean
   /** Address that filters the screen down to this group alone. */
-  groupHref: string;
+  groupHref: string
 }) {
-  const groupId = group.id;
-  const newItemFormId = `new-item-${groupId ?? "ungrouped"}`;
+  const groupId = group.id
+  const newItemFormId = `new-item-${groupId ?? 'ungrouped'}`
 
-  const [open, setOpen] = useState(true);
-  const [renaming, setRenamer] = useState({ open: false, session: 0 });
-  const [adding, setAdder] = useState({ open: false, session: 0 });
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const [, startAction] = useTransition();
+  const [open, setOpen] = useState(true)
 
-  const renameButton = useRef<HTMLButtonElement>(null);
-  const [newItemKey, setNewItemKey] = useState(0);
+  // "Fold all" arrives as a stamped request rather than as a value to mirror,
+  // so applying it is a one-off: adjust state during render when the stamp
+  // changes, which is React's own answer to "reset state when a prop
+  // changes" and re-renders before anything is painted.
+  const request = useGroupsOpenRequest()
+  const [appliedToken, setAppliedToken] = useState(0)
+  if (request && request.token !== appliedToken) {
+    setAppliedToken(request.token)
+    if (request.open !== open) setOpen(request.open)
+  }
+  const [renaming, setRenamer] = useState({ open: false, session: 0 })
+  const [adding, setAdder] = useState({ open: false, session: 0 })
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const [, startAction] = useTransition()
+
+  const renameButton = useRef<HTMLButtonElement>(null)
+  const [newItemKey, setNewItemKey] = useState(0)
 
   function setRenaming(value: boolean) {
-    setRenamer((current) => ({ open: value, session: current.session + 1 }));
+    setRenamer((current) => ({ open: value, session: current.session + 1 }))
   }
 
   function setAdding(value: boolean) {
-    setAdder((current) => ({ open: value, session: current.session + 1 }));
-    if (value) setOpen(true);
+    setAdder((current) => ({ open: value, session: current.session + 1 }))
+    if (value) setOpen(true)
   }
 
-  const [renameState, renameAction, renamingPending] = useActionState<
-    FormState,
-    FormData
-  >(async (previous, formData) => {
-    const next = await updateGroup(previous, formData);
-    if (next.error === null) {
-      startTransition(() => setRenaming(false));
-      toast.success("Grupo guardado");
-    }
-    return { ...next, session: renaming.session };
-  }, idleFormState);
+  const [renameState, renameAction, renamingPending] = useActionState<FormState, FormData>(
+    async (previous, formData) => {
+      const next = await updateGroup(previous, formData)
+      if (next.error === null) {
+        startTransition(() => setRenaming(false))
+        toast.success('Grupo guardado')
+      }
+      return { ...next, session: renaming.session }
+    },
+    idleFormState,
+  )
 
   const [addState, addAction, addPending] = useActionState<FormState, FormData>(
     async (previous, formData) => {
-      const next = await createItem(previous, formData);
+      const next = await createItem(previous, formData)
       // Inside a transition so the blank row and the revalidated table commit
       // together; see the note in item-row.tsx.
       if (next.error === null) {
-        startTransition(() => setNewItemKey((key) => key + 1));
-        toast.success("Concepto añadido");
+        startTransition(() => setNewItemKey((key) => key + 1))
+        toast.success('Concepto añadido')
       }
-      return { ...next, session: adding.session };
+      return { ...next, session: adding.session }
     },
     idleFormState,
-  );
+  )
 
   // Closing the rename form takes the focused control with it; hand focus back
   // to the button that opened it rather than dropping it on <body>.
-  const wasRenaming = useRef(false);
+  const wasRenaming = useRef(false)
   useEffect(() => {
     if (wasRenaming.current && !renaming.open) {
-      renameButton.current?.focus();
+      renameButton.current?.focus()
     }
-    wasRenaming.current = renaming.open;
-  }, [renaming.open]);
+    wasRenaming.current = renaming.open
+  }, [renaming.open])
 
   function runDeleteGroup() {
     return new Promise<void>((resolve) => {
       startAction(async () => {
-        const data = new FormData();
-        data.set("id", groupId ?? "");
-        const result = await deleteGroup(idleState, data);
-        if (result.error) toast.error(result.error);
-        else toast.error(`Grupo «${group.name}» borrado`);
-        resolve();
-      });
-    });
+        const data = new FormData()
+        data.set('id', groupId ?? '')
+        const result = await deleteGroup(idleState, data)
+        if (result.error) toast.error(result.error)
+        else toast.error(`Grupo «${group.name}» borrado`)
+        resolve()
+      })
+    })
   }
 
   function acceptDrop(itemId: string) {
     startAction(async () => {
-      const data = new FormData();
-      data.set("id", itemId);
-      data.set("group_id", groupId ?? "");
-      const result = await moveItem(idleState, data);
-      if (result.error) toast.error(result.error);
-      else toast.success(`Concepto movido a ${group.name}`);
-    });
+      const data = new FormData()
+      data.set('id', itemId)
+      data.set('group_id', groupId ?? '')
+      const result = await moveItem(idleState, data)
+      if (result.error) toast.error(result.error)
+      else toast.success(`Concepto movido a ${group.name}`)
+    })
   }
 
-  const renameError =
-    renameState.session === renaming.session ? renameState.error : null;
-  const addError = addState.session === adding.session ? addState.error : null;
+  const renameError = renameState.session === renaming.session ? renameState.error : null
+  const addError = addState.session === adding.session ? addState.error : null
 
   return (
     <>
       <tbody
         aria-label={group.name}
-        className={`group/section ${dragOver ? "bg-accent-soft" : ""}`}
+        className={`group/section ${dragOver ? 'bg-accent-soft' : ''}`}
         onDragOver={(event) => {
           // Only a row from this table, and never back into the group it
           // already sits in -- dragover cannot read the payload, so the
           // no-op drop is caught on drop instead.
-          if (!event.dataTransfer.types.includes(DRAG_MIME)) return;
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "move";
-          setDragOver(true);
+          if (!event.dataTransfer.types.includes(DRAG_MIME)) return
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'move'
+          setDragOver(true)
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(event) => {
-          const itemId = event.dataTransfer.getData(DRAG_MIME);
-          setDragOver(false);
-          if (!itemId) return;
-          event.preventDefault();
-          if (group.items.some((item) => item.id === itemId)) return;
-          acceptDrop(itemId);
+          const itemId = event.dataTransfer.getData(DRAG_MIME)
+          setDragOver(false)
+          if (!itemId) return
+          event.preventDefault()
+          if (group.items.some((item) => item.id === itemId)) return
+          acceptDrop(itemId)
         }}
       >
         <tr className="bg-surface-sunk">
@@ -196,12 +195,12 @@ export function GroupSection({
                 type="button"
                 onClick={() => setOpen(!open)}
                 aria-expanded={open}
-                aria-label={`${open ? "Contraer" : "Expandir"} ${group.name}`}
+                aria-label={`${open ? 'Contraer' : 'Expandir'} ${group.name}`}
                 className="flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
               >
                 <svg
                   {...ICON_PROPS}
-                  className={`text-faint transition-transform ${open ? "rotate-90" : ""}`}
+                  className={`text-faint transition-transform ${open ? 'rotate-90' : ''}`}
                 >
                   <path d="M6 3.6 10.4 8 6 12.4" />
                 </svg>
@@ -298,18 +297,10 @@ export function GroupSection({
                     className={`${FIELD_CLASS} num w-20`}
                   />
                 </label>
-                <button
-                  type="submit"
-                  disabled={renamingPending}
-                  className={PRIMARY_BUTTON_CLASS}
-                >
-                  {renamingPending ? "Guardando…" : "Guardar"}
+                <button type="submit" disabled={renamingPending} className={PRIMARY_BUTTON_CLASS}>
+                  {renamingPending ? 'Guardando…' : 'Guardar'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setRenaming(false)}
-                  className={BUTTON_CLASS}
-                >
+                <button type="button" onClick={() => setRenaming(false)} className={BUTTON_CLASS}>
                   Cancelar
                 </button>
                 {renameError ? (
@@ -324,12 +315,7 @@ export function GroupSection({
 
         {open
           ? group.items.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                groups={groups}
-                groupName={group.name}
-              />
+              <ItemRow key={item.id} item={item} groups={groups} groupName={group.name} />
             ))
           : null}
 
@@ -349,19 +335,11 @@ export function GroupSection({
                     is no select for it: if it lands in the wrong place, the
                     handle in the first column moves it in one drag.
                   */}
-                  <input type="hidden" name="group_id" value={groupId ?? ""} />
-                  <button
-                    type="submit"
-                    disabled={addPending}
-                    className={PRIMARY_BUTTON_CLASS}
-                  >
-                    {addPending ? "Añadiendo…" : "Añadir"}
+                  <input type="hidden" name="group_id" value={groupId ?? ''} />
+                  <button type="submit" disabled={addPending} className={PRIMARY_BUTTON_CLASS}>
+                    {addPending ? 'Añadiendo…' : 'Añadir'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setAdding(false)}
-                    className={BUTTON_CLASS}
-                  >
+                  <button type="button" onClick={() => setAdding(false)} className={BUTTON_CLASS}>
                     Cancelar
                   </button>
                 </form>
@@ -389,10 +367,7 @@ export function GroupSection({
               table-cell box, and with it the colspan that makes this row as
               wide as the table. The stacking happens in a div inside it.
             */}
-            <td
-              colSpan={ITEM_TABLE_COLUMN_COUNT}
-              className="border-b border-line-soft p-0"
-            >
+            <td colSpan={ITEM_TABLE_COLUMN_COUNT} className="border-b border-line-soft p-0">
               <div className="flex flex-col items-start">
                 {/*
                 The way to add a concept is at the END of the group, where
@@ -409,10 +384,10 @@ export function GroupSection({
                     <path d="M8 3.4v9.2M3.4 8h9.2" />
                   </svg>
                   {group.items.length > 0
-                    ? "Añadir concepto"
+                    ? 'Añadir concepto'
                     : paginated
-                      ? "Sin conceptos de este grupo en esta página. Añadir uno"
-                      : "Este grupo no tiene conceptos. Añade el primero."}
+                      ? 'Sin conceptos de este grupo en esta página. Añadir uno'
+                      : 'Este grupo no tiene conceptos. Añade el primero.'}
                 </button>
                 {/*
                 A group whose concepts all sit on another page must not be
@@ -441,15 +416,15 @@ export function GroupSection({
           description="El grupo desaparece del tarifario. Sus conceptos no."
           risks={[
             group.items.length === 0
-              ? "Este grupo no tiene ningún concepto, así que no se mueve nada."
+              ? 'Este grupo no tiene ningún concepto, así que no se mueve nada.'
               : `Sus ${group.items.length} conceptos pasan a «Sin grupo» y siguen ahí con su código y su precio.`,
-            "Los presupuestos ya hechos no cambian: cada línea guardó el nombre del grupo cuando se escribió.",
-            "Para volver a tenerlo habría que crear el grupo otra vez y arrastrar los conceptos de vuelta.",
+            'Los presupuestos ya hechos no cambian: cada línea guardó el nombre del grupo cuando se escribió.',
+            'Para volver a tenerlo habría que crear el grupo otra vez y arrastrar los conceptos de vuelta.',
           ]}
           confirmLabel="Borrar grupo"
           onConfirm={runDeleteGroup}
         />
       )}
     </>
-  );
+  )
 }

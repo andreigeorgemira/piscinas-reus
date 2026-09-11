@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { PageHeader } from '@/app/admin/page-header'
-import { ACTION_BAR_FORM_ID, ActionBar } from '@/components/ui/action-bar'
+import { ACTION_BAR_FORM_ID, ActionBar, FilterChip } from '@/components/ui/action-bar'
 import { PAGE_SIZES, Paginator } from '@/components/ui/paginator'
 import { DataTable, TableEmpty } from '@/components/ui/table'
 import { requireAdmin } from '@/lib/auth/require-admin'
@@ -14,9 +14,9 @@ import {
 import { parseDecimal } from '@/lib/price-book/decimal'
 import { UNIT_LABELS, UNIT_TYPES, type UnitType } from '@/lib/price-book/schema'
 import { GroupSection } from './group-section'
+import { GroupsOpenProvider, ToggleAllGroups } from './groups-open'
 import { PRICE_BOOK_COLUMNS } from './item-fields'
 import { NewGroupForm } from './new-group-form'
-import { HEADER_BUTTON_CLASS } from './ui'
 
 export const metadata: Metadata = { title: 'Tarifario' }
 
@@ -80,8 +80,7 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
     unit: (UNIT_TYPES as readonly string[]).includes(requestedUnit) ? requestedUnit : '',
     costMin: firstValue(params.costMin).trim(),
     costMax: firstValue(params.costMax).trim(),
-    active:
-      requestedActive === 'active' || requestedActive === 'retired' ? requestedActive : 'all',
+    active: requestedActive === 'active' || requestedActive === 'retired' ? requestedActive : 'all',
     size: PAGE_SIZES.includes(requestedSize) ? requestedSize : PAGE_SIZES[1]!,
     page: Number.isFinite(requestedPage) && requestedPage > 1 ? requestedPage : 1,
   }
@@ -106,6 +105,54 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
     (query.active !== 'all' ? 1 : 0)
 
   const filtering = filterCount > 0 || query.q !== ''
+
+  const groupName =
+    query.group === UNGROUPED_FILTER
+      ? UNGROUPED_NAME
+      : (listing.allGroups.find((group) => group.id === query.group)?.name ?? '')
+
+  // One chip per filter in force, each carrying the address that lifts just
+  // that one. The badge on the button says how many; these say which.
+  const chips = [
+    query.group && groupName ? (
+      <FilterChip
+        key="group"
+        label="Grupo"
+        value={groupName}
+        href={href(query, { group: '', page: 1 })}
+      />
+    ) : null,
+    query.unit ? (
+      <FilterChip
+        key="unit"
+        label="Unidad"
+        value={UNIT_LABELS[query.unit as UnitType]}
+        href={href(query, { unit: '', page: 1 })}
+      />
+    ) : null,
+    query.costMin || query.costMax ? (
+      <FilterChip
+        key="cost"
+        label="Coste"
+        value={
+          query.costMin && query.costMax
+            ? `${query.costMin} – ${query.costMax} €`
+            : query.costMin
+              ? `desde ${query.costMin} €`
+              : `hasta ${query.costMax} €`
+        }
+        href={href(query, { costMin: '', costMax: '', page: 1 })}
+      />
+    ) : null,
+    query.active !== 'all' ? (
+      <FilterChip
+        key="active"
+        label="Estado"
+        value={query.active === 'active' ? 'Solo activos' : 'Solo retirados'}
+        href={href(query, { active: 'all', page: 1 })}
+      />
+    ) : null,
+  ].filter(Boolean)
 
   // A group with nothing on this page is worth a heading only when the screen
   // is showing the catalogue whole: that is the empty group a staff member
@@ -133,195 +180,203 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
         }
       />
 
-      <ActionBar
-        action="/admin/price-book"
-        searchValue={query.q}
-        searchLabel="Buscar en el tarifario"
-        searchPlaceholder="Buscar código, concepto o descripción"
-        hidden={query.size === PAGE_SIZES[1] ? undefined : { size: String(query.size) }}
-        filterCount={filterCount}
-        onClearFilters={href(query, {
-          group: '',
-          unit: '',
-          costMin: '',
-          costMax: '',
-          active: 'all',
-          page: 1,
-        })}
-        filters={
-          <div className="flex flex-col gap-3">
-            <label className="flex flex-col gap-1">
-              <span className="text-2xs font-medium text-muted">Grupo</span>
-              <select
-                form={ACTION_BAR_FORM_ID}
-                name="group"
-                defaultValue={query.group}
-                className={FILTER_FIELD_CLASS}
-              >
-                <option value="">Todos</option>
-                {listing.allGroups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-                <option value={UNGROUPED_FILTER}>{UNGROUPED_NAME}</option>
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-2xs font-medium text-muted">Unidad</span>
-              <select
-                form={ACTION_BAR_FORM_ID}
-                name="unit"
-                defaultValue={query.unit}
-                className={FILTER_FIELD_CLASS}
-              >
-                <option value="">Todas</option>
-                {UNIT_TYPES.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {UNIT_LABELS[unit]}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <fieldset className="flex flex-col gap-1">
-              <legend className="text-2xs font-medium text-muted">Coste (€)</legend>
-              <div className="flex items-center gap-2">
-                <input
-                  form={ACTION_BAR_FORM_ID}
-                  name="costMin"
-                  inputMode="decimal"
-                  defaultValue={query.costMin}
-                  placeholder="Desde"
-                  aria-label="Coste desde"
-                  className={`${FILTER_FIELD_CLASS} num text-right`}
-                />
-                <span aria-hidden="true" className="text-xs text-faint">
-                  –
-                </span>
-                <input
-                  form={ACTION_BAR_FORM_ID}
-                  name="costMax"
-                  inputMode="decimal"
-                  defaultValue={query.costMax}
-                  placeholder="Hasta"
-                  aria-label="Coste hasta"
-                  className={`${FILTER_FIELD_CLASS} num text-right`}
-                />
-              </div>
-            </fieldset>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-2xs font-medium text-muted">Estado</span>
-              <select
-                form={ACTION_BAR_FORM_ID}
-                name="active"
-                defaultValue={query.active}
-                className={FILTER_FIELD_CLASS}
-              >
-                <option value="all">Todos</option>
-                <option value="active">Solo activos</option>
-                <option value="retired">Solo retirados</option>
-              </select>
-            </label>
-          </div>
-        }
-      >
-        <Link href="/admin/price-book/import" className={HEADER_BUTTON_CLASS}>
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M8 10.4V2.6" />
-            <path d="M5.2 7.6 8 10.4l2.8-2.8" />
-            <path d="M2.8 11.4v1.2a.8.8 0 0 0 .8.8h8.8a.8.8 0 0 0 .8-.8v-1.2" />
-          </svg>
-          Importar CSV
-        </Link>
-      </ActionBar>
-
       <div className="min-h-0 flex-1 p-5">
-        <DataTable
-          columns={PRICE_BOOK_COLUMNS}
-          empty={
-            sections.length === 0 ? (
-              <TableEmpty
-                message={
-                  filtering
-                    ? 'Ningún concepto coincide con la búsqueda.'
-                    : 'El tarifario está vacío. Crea un grupo para empezar.'
+        <GroupsOpenProvider>
+          <DataTable
+            columns={PRICE_BOOK_COLUMNS}
+            toolbar={
+              <ActionBar
+                action="/admin/price-book"
+                searchValue={query.q}
+                searchLabel="Buscar en el tarifario"
+                searchPlaceholder="Buscar código, concepto o descripción"
+                hidden={query.size === PAGE_SIZES[1] ? undefined : { size: String(query.size) }}
+                filterCount={filterCount}
+                onClearFilters={href(query, {
+                  group: '',
+                  unit: '',
+                  costMin: '',
+                  costMax: '',
+                  active: 'all',
+                  page: 1,
+                })}
+                chips={chips.length > 0 ? chips : undefined}
+                filters={
+                  <div className="flex flex-col gap-3">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-2xs font-medium text-muted">Grupo</span>
+                      <select
+                        form={ACTION_BAR_FORM_ID}
+                        name="group"
+                        defaultValue={query.group}
+                        className={FILTER_FIELD_CLASS}
+                      >
+                        <option value="">Todos</option>
+                        {listing.allGroups.map((group) => (
+                          <option key={group.id} value={group.id}>
+                            {group.name}
+                          </option>
+                        ))}
+                        <option value={UNGROUPED_FILTER}>{UNGROUPED_NAME}</option>
+                      </select>
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                      <span className="text-2xs font-medium text-muted">Unidad</span>
+                      <select
+                        form={ACTION_BAR_FORM_ID}
+                        name="unit"
+                        defaultValue={query.unit}
+                        className={FILTER_FIELD_CLASS}
+                      >
+                        <option value="">Todas</option>
+                        {UNIT_TYPES.map((unit) => (
+                          <option key={unit} value={unit}>
+                            {UNIT_LABELS[unit]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <fieldset className="flex flex-col gap-1">
+                      <legend className="text-2xs font-medium text-muted">Coste (€)</legend>
+                      <div className="flex items-center gap-2">
+                        <input
+                          form={ACTION_BAR_FORM_ID}
+                          name="costMin"
+                          inputMode="decimal"
+                          defaultValue={query.costMin}
+                          placeholder="Desde"
+                          aria-label="Coste desde"
+                          className={`${FILTER_FIELD_CLASS} num text-right`}
+                        />
+                        <span aria-hidden="true" className="text-xs text-faint">
+                          –
+                        </span>
+                        <input
+                          form={ACTION_BAR_FORM_ID}
+                          name="costMax"
+                          inputMode="decimal"
+                          defaultValue={query.costMax}
+                          placeholder="Hasta"
+                          aria-label="Coste hasta"
+                          className={`${FILTER_FIELD_CLASS} num text-right`}
+                        />
+                      </div>
+                    </fieldset>
+
+                    <label className="flex flex-col gap-1">
+                      <span className="text-2xs font-medium text-muted">Estado</span>
+                      <select
+                        form={ACTION_BAR_FORM_ID}
+                        name="active"
+                        defaultValue={query.active}
+                        className={FILTER_FIELD_CLASS}
+                      >
+                        <option value="all">Todos</option>
+                        <option value="active">Solo activos</option>
+                        <option value="retired">Solo retirados</option>
+                      </select>
+                    </label>
+                  </div>
                 }
-                icon={
+              >
+                <ToggleAllGroups />
+                <Link
+                  href="/admin/price-book/import"
+                  className="flex h-9 items-center gap-2 rounded-lg border border-accent/40 bg-accent-soft px-3 text-xs font-medium text-accent transition-colors hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                >
                   <svg
-                    width="28"
-                    height="28"
+                    width="14"
+                    height="14"
                     viewBox="0 0 16 16"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="1.2"
+                    strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <circle cx="7.2" cy="7.2" r="4.4" />
-                    <path d="m10.6 10.6 2.8 2.8" />
+                    <path d="M8 10.4V2.6" />
+                    <path d="M5.2 7.6 8 10.4l2.8-2.8" />
+                    <path d="M2.8 11.4v1.2a.8.8 0 0 0 .8.8h8.8a.8.8 0 0 0 .8-.8v-1.2" />
                   </svg>
-                }
-              >
-                {filtering ? (
-                  <Link href="/admin/price-book" className="text-xs text-accent underline">
-                    Ver el tarifario entero
-                  </Link>
-                ) : null}
-              </TableEmpty>
-            ) : undefined
-          }
-          footer={
-            <>
-              <NewGroupForm nextPosition={nextPosition} />
-              <Paginator
-                page={listing.page}
-                pageCount={listing.pageCount}
-                pageSize={listing.pageSize}
-                shown={listing.itemsShown}
-                total={listing.itemsTotal}
-                noun="conceptos"
-                pageHrefs={{
-                  previous: listing.page > 1 ? href(query, { page: listing.page - 1 }) : null,
-                  next:
-                    listing.page < listing.pageCount
-                      ? href(query, { page: listing.page + 1 })
-                      : null,
-                }}
-                sizeHrefs={PAGE_SIZES.map((size) => ({
-                  size,
-                  href: href(query, { size, page: 1 }),
-                }))}
+                  Importar CSV
+                </Link>
+              </ActionBar>
+            }
+            empty={
+              sections.length === 0 ? (
+                <TableEmpty
+                  message={
+                    filtering
+                      ? 'Ningún concepto coincide con la búsqueda.'
+                      : 'El tarifario está vacío. Crea un grupo para empezar.'
+                  }
+                  icon={
+                    <svg
+                      width="28"
+                      height="28"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="7.2" cy="7.2" r="4.4" />
+                      <path d="m10.6 10.6 2.8 2.8" />
+                    </svg>
+                  }
+                >
+                  {filtering ? (
+                    <Link href="/admin/price-book" className="text-xs text-accent underline">
+                      Ver el tarifario entero
+                    </Link>
+                  ) : null}
+                </TableEmpty>
+              ) : undefined
+            }
+            footer={
+              <>
+                <NewGroupForm nextPosition={nextPosition} />
+                <Paginator
+                  page={listing.page}
+                  pageCount={listing.pageCount}
+                  pageSize={listing.pageSize}
+                  shown={listing.itemsShown}
+                  total={listing.itemsTotal}
+                  noun="conceptos"
+                  pageHrefs={{
+                    previous: listing.page > 1 ? href(query, { page: listing.page - 1 }) : null,
+                    next:
+                      listing.page < listing.pageCount
+                        ? href(query, { page: listing.page + 1 })
+                        : null,
+                  }}
+                  sizeHrefs={PAGE_SIZES.map((size) => ({
+                    size,
+                    href: href(query, { size, page: 1 }),
+                  }))}
+                />
+              </>
+            }
+          >
+            {sections.map((section) => (
+              <GroupSection
+                key={section.id ?? 'ungrouped'}
+                group={section}
+                groups={listing.allGroups}
+                paginated={listing.pageCount > 1}
+                groupHref={href(query, {
+                  group: section.id ?? UNGROUPED_FILTER,
+                  page: 1,
+                })}
               />
-            </>
-          }
-        >
-          {sections.map((section) => (
-            <GroupSection
-              key={section.id ?? 'ungrouped'}
-              group={section}
-              groups={listing.allGroups}
-              paginated={listing.pageCount > 1}
-              groupHref={href(query, {
-                group: section.id ?? UNGROUPED_FILTER,
-                page: 1,
-              })}
-            />
-          ))}
-        </DataTable>
+            ))}
+          </DataTable>
+        </GroupsOpenProvider>
       </div>
     </>
   )

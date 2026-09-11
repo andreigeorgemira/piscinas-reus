@@ -23,15 +23,18 @@ export type TableColumn = {
 export function DataTable({
   columns,
   children,
+  toolbar,
   footer,
   empty,
 }: {
   columns: TableColumn[]
   /** One or more <tbody> elements. */
   children?: ReactNode
+  /** A strip above the column headers: search, filters, screen actions. */
+  toolbar?: ReactNode
   /** A strip under the table: a pager, a total, an add control. */
   footer?: ReactNode
-  /** Rendered instead of the table when there is nothing to show. */
+  /** Rendered instead of the rows when there is nothing to show. */
   empty?: ReactNode
 }) {
   return (
@@ -46,6 +49,7 @@ export function DataTable({
      * card grows to fit every row and the scrollbar lands on the page.
      */
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-card">
+      {toolbar}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <table className="w-full table-fixed border-collapse text-sm">
           <colgroup>
