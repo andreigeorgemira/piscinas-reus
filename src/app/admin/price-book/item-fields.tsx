@@ -6,31 +6,53 @@ import { FIELD_CLASS } from './ui'
 /** A group an item can be filed under. The "Sin grupo" bucket is not one. */
 export type GroupOption = { id: string; name: string }
 
-type Column = { label: string; numeric?: boolean; width?: string }
+type Column = { label: string; numeric?: boolean; width: string }
 
 /**
- * The columns this component fills, in order. Exported so the table header
- * and the fields below it can never drift apart, and so a row that needs to
- * span the whole table (an error message) knows how wide the table is. The
- * `+ 1` is the actions column, which each row builds for itself.
+ * The columns this component fills, in order. Exported so the table header,
+ * the column widths and the fields below them can never drift apart, and so
+ * a row that needs to span the whole table (an error message) knows how wide
+ * the table is. The `+ 1` is the actions column, which each row builds for
+ * itself.
  *
- * There is no Grupo column. Every row here is already inside the section for
- * its group, so the column repeated the heading once per row and bought
+ * There is no Grupo column. Every row here is already inside the rowgroup
+ * for its group, so the column repeated the heading once per row and bought
  * nothing; the control that moves an item to another group now lives in the
  * edit row's Concepto cell, where it is only rendered when it can be used.
  */
 export const ITEM_COLUMNS: Column[] = [
-  { label: 'Código', width: 'w-[104px]' },
-  { label: 'Concepto' },
-  { label: 'Unidad', width: 'w-[92px]' },
-  { label: 'Coste', numeric: true, width: 'w-[104px]' },
-  { label: 'Precio', numeric: true, width: 'w-[104px]' },
-  { label: 'Activo', width: 'w-[72px]' },
+  { label: 'Código', width: 'w-32' },
+  { label: 'Concepto', width: 'w-auto' },
+  { label: 'Unidad', width: 'w-24' },
+  { label: 'Coste', numeric: true, width: 'w-28' },
+  { label: 'Precio', numeric: true, width: 'w-28' },
+  { label: 'Activo', width: 'w-24' },
 ]
+
+const ACTIONS_COLUMN_WIDTH = 'w-28'
 
 export const ITEM_TABLE_COLUMN_COUNT = ITEM_COLUMNS.length + 1
 
-export const CELL_CLASS = 'border-b border-line-soft px-2.5 py-1 align-middle'
+export const CELL_CLASS = 'border-b border-line-soft px-3 py-1.5 align-middle'
+
+/**
+ * Fixes the column widths for the whole catalogue.
+ *
+ * The screen is one table with a rowgroup per group, rather than a table per
+ * group: a repeated column header every four rows was the single noisiest
+ * thing on it. `table-fixed` plus these widths is what lets the long concept
+ * names truncate instead of shoving the price columns around.
+ */
+export function ItemColumns() {
+  return (
+    <colgroup>
+      {ITEM_COLUMNS.map((column) => (
+        <col key={column.label} className={column.width} />
+      ))}
+      <col className={ACTIONS_COLUMN_WIDTH} />
+    </colgroup>
+  )
+}
 
 /**
  * The editable cells shared by the edit row and the new-item row.
@@ -68,6 +90,7 @@ export function ItemFields({
           aria-label="Código"
           defaultValue={item?.code ?? ''}
           maxLength={40}
+          placeholder="REV-001"
           // The first field of a row that only ever appears in response to a
           // click, so taking focus here continues the gesture rather than
           // stealing it.
@@ -76,14 +99,15 @@ export function ItemFields({
         />
       </td>
       <td className={CELL_CLASS}>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           <input
             form={formId}
             name="name"
             aria-label="Concepto"
             defaultValue={item?.name ?? ''}
             maxLength={200}
-            className={`${FIELD_CLASS} w-full`}
+            placeholder="Nombre del concepto"
+            className={`${FIELD_CLASS} w-full font-medium`}
           />
           <input
             form={formId}
@@ -91,13 +115,14 @@ export function ItemFields({
             aria-label="Descripción"
             defaultValue={item?.description ?? ''}
             maxLength={2000}
+            placeholder="Descripción (opcional)"
             className={`${FIELD_CLASS} w-full`}
           />
           {/*
             The only place an item changes group. It sits under the concept
             rather than in a column of its own because moving an item between
             groups is a rare edit, and a column for it cost every row of the
-            table a repeat of its own section heading.
+            table a repeat of its own group heading.
           */}
           <select
             form={formId}
@@ -142,6 +167,7 @@ export function ItemFields({
           aria-label="Coste"
           inputMode="decimal"
           defaultValue={item ? formatMoney(item.unitCost) : ''}
+          placeholder="0,00"
           className={`${FIELD_CLASS} num w-full text-right`}
         />
       </td>
@@ -152,6 +178,7 @@ export function ItemFields({
           aria-label="Precio"
           inputMode="decimal"
           defaultValue={item ? formatMoney(item.unitPrice) : ''}
+          placeholder="0,00"
           className={`${FIELD_CLASS} num w-full text-right`}
         />
       </td>
@@ -168,7 +195,7 @@ export function ItemFields({
           name="is_active"
           aria-label="Activo"
           defaultChecked={item?.isActive ?? true}
-          className="size-4 accent-accent focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+          className="size-4 accent-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
         />
       </td>
     </>

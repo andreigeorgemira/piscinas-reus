@@ -60,10 +60,10 @@ export function AdminNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="flex flex-col gap-0.5 px-2.5 pt-3.5">
+    <nav className="flex flex-col gap-0.5 overflow-y-auto px-3 pt-4">
       {ITEMS.map((group) => (
-        <div key={group.section} className="flex flex-col gap-0.5 pb-3">
-          <span className="px-2.5 pb-1.5 text-[10px] font-medium tracking-[0.08em] text-shell-faint uppercase">
+        <div key={group.section} className="flex flex-col gap-px pb-4">
+          <span className="px-2.5 pb-2 text-2xs font-medium tracking-[0.08em] text-shell-faint uppercase">
             {group.section}
           </span>
           {group.items.map((item) => {
@@ -73,7 +73,7 @@ export function AdminNav() {
                 key={item.href}
                 href={item.href}
                 aria-current={current ? 'page' : undefined}
-                className={`flex items-center gap-2.5 rounded-[5px] px-2.5 py-1.5 text-[13px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                className={`flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                   current
                     ? 'bg-shell-active font-medium text-shell-ink'
                     : 'text-shell-muted hover:bg-shell-active/60 hover:text-shell-ink'

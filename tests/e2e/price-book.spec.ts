@@ -84,7 +84,7 @@ test('creates a group, adds a concept and edits its price inline', async ({ page
 
   // The section is a named region only once React has mounted it with its
   // heading, which is exactly what makes it addressable without a CSS class.
-  const region = page.getByRole('region', { name: groupName })
+  const region = page.getByRole('rowgroup', { name: groupName })
   await expect(region).toBeVisible()
 
   await region.getByRole('button', { name: `Añadir concepto a ${groupName}` }).click()
@@ -124,7 +124,7 @@ test('reports a duplicate code in Spanish instead of crashing', async ({ page })
   await page.getByLabel('Nuevo grupo').fill(groupName)
   await page.getByRole('button', { name: 'Crear grupo' }).click()
 
-  const region = page.getByRole('region', { name: groupName })
+  const region = page.getByRole('rowgroup', { name: groupName })
   await region.getByRole('button', { name: `Añadir concepto a ${groupName}` }).click()
   await region.getByLabel('Código', { exact: true }).fill(code)
   await region.getByLabel('Concepto', { exact: true }).fill(firstName)
@@ -190,7 +190,7 @@ test('retires and reactivates a concept', async ({ page }) => {
   await loginAsStaff(page)
   await page.goto('/admin/price-book')
 
-  const region = page.getByRole('region', { name: groupName })
+  const region = page.getByRole('rowgroup', { name: groupName })
   // A live filter, not a snapshot: it is re-evaluated on every assertion
   // below, so it keeps matching the same row across the Sí/No flip that
   // Retirar/Reactivar causes.
@@ -287,7 +287,7 @@ test('imports a CSV that creates its own group and price', async ({ page }) => {
   await page.getByRole('link', { name: 'Ver el tarifario' }).click()
   await expect(page).toHaveURL(/\/admin\/price-book$/)
 
-  const region = page.getByRole('region', { name: groupName })
+  const region = page.getByRole('rowgroup', { name: groupName })
   await expect(region.getByRole('cell', { name: '18,00', exact: true })).toBeVisible()
 })
 
@@ -513,7 +513,7 @@ test('finds a concept by code and keeps the search in the address', async ({ pag
   await page.getByLabel('Nuevo grupo').fill(groupName)
   await page.getByRole('button', { name: 'Crear grupo' }).click()
 
-  const region = page.getByRole('region', { name: groupName })
+  const region = page.getByRole('rowgroup', { name: groupName })
   await region.getByRole('button', { name: `Añadir concepto a ${groupName}` }).click()
   await region.getByLabel('Código', { exact: true }).fill(code)
   await region.getByLabel('Concepto', { exact: true }).fill(itemName)
@@ -532,5 +532,5 @@ test('finds a concept by code and keeps the search in the address', async ({ pag
 
   // Nothing else survived the filter: the seed catalogue is still there, it
   // is simply not on this screen.
-  await expect(page.getByRole('region', { name: 'Estructura' })).toHaveCount(0)
+  await expect(page.getByRole('rowgroup', { name: 'Estructura' })).toHaveCount(0)
 })

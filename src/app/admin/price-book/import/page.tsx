@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { PageHeader } from '@/app/admin/page-header'
 import { requireAdmin } from '@/lib/auth/require-admin'
+import { HEADER_BUTTON_CLASS } from '../ui'
 import { ImportForm } from './import-form'
 
 export const metadata: Metadata = { title: 'Importar tarifario' }
@@ -18,15 +19,12 @@ export default async function ImportPriceBookPage() {
   return (
     <>
       <PageHeader title="Importar tarifario">
-        <Link
-          href="/admin/price-book"
-          className="flex h-[30px] items-center rounded-[5px] border border-line bg-surface px-2.5 text-xs font-medium text-ink-soft hover:border-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
+        <Link href="/admin/price-book" className={HEADER_BUTTON_CLASS}>
           Volver al tarifario
         </Link>
       </PageHeader>
 
-      <div className="p-5">
+      <div className="flex-1 overflow-y-auto p-5">
         <ImportForm />
       </div>
     </>

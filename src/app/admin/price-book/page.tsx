@@ -9,7 +9,9 @@ import {
   type PriceBookGroupRef,
 } from '@/lib/price-book/queries'
 import { GroupSection } from './group-section'
+import { ITEM_COLUMNS, ItemColumns } from './item-fields'
 import { NewGroupForm } from './new-group-form'
+import { HEADER_BUTTON_CLASS } from './ui'
 
 export const metadata: Metadata = { title: 'Tarifario' }
 
@@ -32,9 +34,14 @@ function href(params: { q: string; group: string; page?: number }): string {
 }
 
 const CHIP_CLASS =
-  'flex h-[26px] shrink-0 items-center rounded-full border px-2.5 text-xs whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
-const CHIP_OFF = `${CHIP_CLASS} border-line bg-surface text-ink-soft hover:border-faint`
+  'flex h-7 shrink-0 items-center rounded-full border px-3 text-xs whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
+const CHIP_OFF = `${CHIP_CLASS} border-line bg-surface text-ink-soft hover:bg-surface-hover`
 const CHIP_ON = `${CHIP_CLASS} border-ink bg-ink text-canvas`
+
+const PAGER_LINK_CLASS =
+  'flex h-7 items-center rounded-md border border-line bg-surface px-2.5 text-xs text-ink-soft transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
+const PAGER_DEAD_CLASS =
+  'flex h-7 items-center rounded-md border border-line px-2.5 text-xs text-faint'
 
 function GroupChips({
   groups,
@@ -90,11 +97,8 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
   // just created and is about to fill. Under a filter, or on page two, an
   // empty heading says nothing and costs a screenful.
   const showEmptyGroups = !filtering && listing.page === 1
-  const sections = listing.groups.filter(
-    (section) => section.items.length > 0 || showEmptyGroups,
-  )
+  const sections = listing.groups.filter((section) => section.items.length > 0 || showEmptyGroups)
 
-  const groupOptions = listing.allGroups
   const nextPosition =
     listing.allGroups.length === 0
       ? 1
@@ -109,7 +113,7 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
         title="Tarifario"
         meta={
           filtering
-            ? `${listing.itemsTotal} conceptos encontrados`
+            ? `${listing.itemsTotal} ${listing.itemsTotal === 1 ? 'resultado' : 'resultados'}`
             : `${listing.itemsTotal} conceptos · ${listing.allGroups.length} grupos`
         }
       >
@@ -120,10 +124,10 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
           silently drop it.
         */}
         <form action="/admin/price-book" className="flex items-center">
-          <label className="flex h-[30px] w-[250px] items-center gap-1.5 rounded-[5px] border border-line bg-canvas px-2 focus-within:border-accent">
+          <label className="flex h-8 w-72 items-center gap-2 rounded-md border border-line bg-canvas px-2.5 focus-within:border-accent">
             <svg
-              width="14"
-              height="14"
+              width="15"
+              height="15"
               viewBox="0 0 16 16"
               fill="none"
               stroke="currentColor"
@@ -140,7 +144,7 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
               type="search"
               name="q"
               defaultValue={q}
-              placeholder="Buscar código o concepto"
+              placeholder="Buscar código, concepto o descripción"
               className="w-full bg-transparent text-xs outline-none placeholder:text-faint"
             />
           </label>
@@ -150,87 +154,129 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
           </button>
         </form>
 
-        <Link
-          href="/admin/price-book/import"
-          className="flex h-[30px] items-center rounded-[5px] border border-line bg-surface px-2.5 text-xs font-medium text-ink-soft hover:border-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
+        <Link href="/admin/price-book/import" className={HEADER_BUTTON_CLASS}>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M8 10.4V2.6" />
+            <path d="M5.2 7.6 8 10.4l2.8-2.8" />
+            <path d="M2.8 11.4v1.2a.8.8 0 0 0 .8.8h8.8a.8.8 0 0 0 .8-.8v-1.2" />
+          </svg>
           Importar CSV
         </Link>
       </PageHeader>
 
-      <div className="flex items-center gap-4 border-b border-line bg-surface px-5 py-2">
+      <div className="flex items-center gap-4 border-b border-line bg-surface px-5 py-2.5">
         <div className="min-w-0 flex-1">
           <GroupChips groups={listing.allGroups} current={group} q={q} />
         </div>
-        <div className="shrink-0 border-l border-line pl-4">
+        <div className="shrink-0">
           <NewGroupForm nextPosition={nextPosition} />
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
-        {sections.length === 0 ? (
-          <p className="text-sm text-muted">
-            {filtering ? (
-              <>
-                Ningún concepto coincide con la búsqueda.{' '}
-                <Link href="/admin/price-book" className="text-accent underline">
+      <div className="flex-1 overflow-y-auto p-5">
+        <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-card">
+          {sections.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 px-5 py-16 text-center">
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-faint"
+                aria-hidden="true"
+              >
+                <circle cx="7.2" cy="7.2" r="4.4" />
+                <path d="m10.6 10.6 2.8 2.8" />
+              </svg>
+              <p className="text-sm text-muted">
+                {filtering
+                  ? 'Ningún concepto coincide con la búsqueda.'
+                  : 'El tarifario está vacío. Crea un grupo para empezar.'}
+              </p>
+              {filtering ? (
+                <Link href="/admin/price-book" className="text-xs text-accent underline">
                   Ver el tarifario entero
                 </Link>
-                .
-              </>
-            ) : (
-              'El tarifario está vacío. Crea un grupo para empezar.'
-            )}
-          </p>
-        ) : (
-          sections.map((section) => (
-            <GroupSection
-              key={section.id ?? 'ungrouped'}
-              group={section}
-              groups={groupOptions}
-            />
-          ))
-        )}
-
-        {listing.pageCount > 1 ? (
-          <nav
-            aria-label="Páginas del tarifario"
-            className="flex items-center gap-2 rounded-[7px] border border-line bg-surface px-3.5 py-2"
-          >
-            <span className="text-[11.5px] text-muted">
-              Mostrando {listing.itemsShown} de {listing.itemsTotal} conceptos
-            </span>
-            <div className="ml-auto flex items-center gap-1.5">
-              {listing.page > 1 ? (
-                <Link
-                  href={href({ q, group, page: listing.page - 1 })}
-                  className="flex h-6 items-center rounded border border-line bg-surface px-2.5 text-xs text-ink-soft hover:border-faint"
-                >
-                  Anterior
-                </Link>
-              ) : (
-                <span className="flex h-6 items-center rounded border border-line px-2.5 text-xs text-faint">
-                  Anterior
-                </span>
-              )}
-              <span className="num flex h-6 items-center rounded border border-line bg-surface px-2.5 text-xs text-ink-soft">
-                {listing.page} / {listing.pageCount}
-              </span>
-              {listing.page < listing.pageCount ? (
-                <Link
-                  href={href({ q, group, page: listing.page + 1 })}
-                  className="flex h-6 items-center rounded border border-line bg-surface px-2.5 text-xs text-ink-soft hover:border-faint"
-                >
-                  Siguiente
-                </Link>
-              ) : (
-                <span className="flex h-6 items-center rounded border border-line px-2.5 text-xs text-faint">
-                  Siguiente
-                </span>
-              )}
+              ) : null}
             </div>
-          </nav>
-        ) : null}
+          ) : (
+            <table className="w-full table-fixed border-collapse text-sm">
+              <ItemColumns />
+              <thead>
+                <tr>
+                  {ITEM_COLUMNS.map((column) => (
+                    <th
+                      key={column.label}
+                      scope="col"
+                      className={`sticky top-0 z-10 border-b border-line bg-surface px-3 py-2 text-2xs font-medium tracking-[0.05em] text-muted uppercase ${
+                        column.numeric ? 'text-right' : 'text-left'
+                      }`}
+                    >
+                      {column.label}
+                    </th>
+                  ))}
+                  <th
+                    scope="col"
+                    className="sticky top-0 z-10 border-b border-line bg-surface px-3 py-2"
+                  >
+                    <span className="sr-only">Acciones</span>
+                  </th>
+                </tr>
+              </thead>
+              {sections.map((section) => (
+                <GroupSection
+                  key={section.id ?? 'ungrouped'}
+                  group={section}
+                  groups={listing.allGroups}
+                />
+              ))}
+            </table>
+          )}
+
+          {listing.pageCount > 1 ? (
+            <nav
+              aria-label="Páginas del tarifario"
+              className="flex items-center gap-2 border-t border-line bg-surface-sunk px-3 py-2"
+            >
+              <span className="text-xs text-muted">
+                Mostrando {listing.itemsShown} de {listing.itemsTotal} conceptos
+              </span>
+              <div className="ml-auto flex items-center gap-1.5">
+                {listing.page > 1 ? (
+                  <Link href={href({ q, group, page: listing.page - 1 })} className={PAGER_LINK_CLASS}>
+                    Anterior
+                  </Link>
+                ) : (
+                  <span className={PAGER_DEAD_CLASS}>Anterior</span>
+                )}
+                <span className="num flex h-7 items-center rounded-md border border-line bg-surface px-2.5 text-xs text-ink-soft">
+                  {listing.page} / {listing.pageCount}
+                </span>
+                {listing.page < listing.pageCount ? (
+                  <Link href={href({ q, group, page: listing.page + 1 })} className={PAGER_LINK_CLASS}>
+                    Siguiente
+                  </Link>
+                ) : (
+                  <span className={PAGER_DEAD_CLASS}>Siguiente</span>
+                )}
+              </div>
+            </nav>
+          ) : null}
+        </div>
       </div>
     </>
   )

@@ -106,7 +106,7 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
 
   return (
     <>
-      <tr className={`group hover:bg-canvas ${item.isActive ? '' : 'text-muted'}`}>
+      <tr className={`group/row hover:bg-surface-hover ${item.isActive ? '' : 'text-muted'}`}>
         {editing ? (
           <>
             <ItemFields
@@ -130,7 +130,7 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
                 id={formId}
                 action={saveAction}
                 onReset={(event) => event.preventDefault()}
-                className="flex flex-col gap-1"
+                className="flex flex-col gap-1.5"
               >
                 <input type="hidden" name="id" value={item.id} />
                 <button type="submit" disabled={saving} className={PRIMARY_BUTTON_CLASS}>
@@ -144,18 +144,30 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
           </>
         ) : (
           <>
-            <td className={`${CELL_CLASS} h-[34px] font-mono text-xs whitespace-nowrap text-muted`}>
+            <td className={`${CELL_CLASS} h-9 truncate font-mono text-xs text-muted`}>
               {item.code ?? '—'}
             </td>
             <td className={CELL_CLASS}>
+              {/*
+                One line, always. The name earns the weight and the
+                description trails it in grey: two lines per row would undo
+                the density this screen is built for, and `title` keeps the
+                full text reachable when a column is too narrow for it.
+              */}
               <div className="flex min-w-0 items-baseline gap-2">
-                <span className="font-medium whitespace-nowrap">{item.name}</span>
+                <span className="truncate font-medium" title={item.name}>
+                  {item.name}
+                </span>
                 {item.description ? (
-                  <span className="truncate text-[11.5px] text-faint">{item.description}</span>
+                  <span className="truncate text-xs text-faint" title={item.description}>
+                    {item.description}
+                  </span>
                 ) : null}
               </div>
             </td>
-            <td className={`${CELL_CLASS} text-xs text-muted`}>{UNIT_LABELS[item.unit]}</td>
+            <td className={`${CELL_CLASS} truncate text-xs text-muted`}>
+              {UNIT_LABELS[item.unit]}
+            </td>
             <td className={`${CELL_CLASS} num text-right text-muted`}>
               {formatMoney(item.unitCost)}
             </td>
@@ -164,15 +176,14 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
             </td>
             {/* Text, not only the grey row: colour alone is not a state. */}
             <td className={CELL_CLASS}>
-              <span
-                className={`inline-flex items-center rounded-full border px-2 py-px text-[11px] ${
-                  item.isActive
-                    ? 'border-line bg-surface-sunk text-ink-soft'
-                    : 'border-warn/40 bg-warn-soft text-warn'
-                }`}
-              >
-                {item.isActive ? 'Sí' : 'No'}
-              </span>
+              {item.isActive ? (
+                <span className="text-xs text-faint">Sí</span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-warn/40 bg-warn-soft px-2 py-0.5 text-2xs text-warn">
+                  <span aria-hidden="true" className="size-1.5 rounded-full bg-warn" />
+                  No
+                </span>
+              )}
             </td>
             <td className={CELL_CLASS}>
               {/*
@@ -182,7 +193,7 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
                 buttons stay in the tab order and in the accessibility tree,
                 and focus-within brings them back for anyone not using a mouse.
               */}
-              <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+              <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
                 <button
                   ref={editButton}
                   type="button"
@@ -245,7 +256,7 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
       </tr>
       {error ? (
         <tr>
-          <td colSpan={ITEM_TABLE_COLUMN_COUNT} className={CELL_CLASS}>
+          <td colSpan={ITEM_TABLE_COLUMN_COUNT} className="border-b border-line-soft px-3 py-2">
             <p role="alert" className="text-sm text-danger">
               {error}
             </p>

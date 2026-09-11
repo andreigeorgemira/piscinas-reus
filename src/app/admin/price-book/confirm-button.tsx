@@ -47,7 +47,7 @@ export function ConfirmButton({
       }}
       className={
         className ??
-        'flex h-[26px] items-center rounded-[5px] border border-danger px-2.5 text-xs font-medium whitespace-nowrap text-danger hover:bg-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:opacity-60'
+        'inline-flex h-7 items-center rounded-md border border-line bg-surface px-2.5 text-xs font-medium whitespace-nowrap text-danger transition-colors hover:border-danger hover:bg-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:opacity-60'
       }
     >
       {children}
