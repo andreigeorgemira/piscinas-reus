@@ -70,19 +70,33 @@ export function hasMoreThanTwoDecimals(value: number): boolean {
   return roundMoney(value) !== value
 }
 
-// Grouping is off on purpose. ICU versions disagree about whether a
-// four-digit amount groups ('1.234,50' vs '1234,50'), so leaving grouping on
-// would make this format -- and the tests pinning it -- version-dependent
-// for no real benefit at the amounts this business deals in.
-const MONEY_FORMATTER = new Intl.NumberFormat('es-ES', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-  useGrouping: false,
-})
-
 /**
- * Formats a number as a Spanish-style money string, e.g. 1234.5 -> '1234,50'.
+ * Formats a number as a Spanish money string: dots for thousands, a comma
+ * for the two decimals. 1234.5 -> '1.234,50', 1234567.5 -> '1.234.567,50'.
+ *
+ * Built by hand rather than with Intl.NumberFormat. ICU versions disagree
+ * about whether a FOUR-digit amount groups at all -- Spanish sets
+ * minimumGroupingDigits to 2, so some builds render 1234.5 as '1234,50' and
+ * others as '1.234,50' -- and a price list that groups a five-digit amount
+ * but not a four-digit one looks like a bug to the person reading it. The
+ * rule here is the one the company asked for, it is the same on every
+ * machine, and it does not depend on which ICU the server was built with.
+ *
+ * The output round-trips: parseDecimal reads a comma as the decimal
+ * separator and discards the dots as grouping, so a price rendered into an
+ * edit field comes back as the same number.
  */
 export function formatMoney(value: number): string {
-  return MONEY_FORMATTER.format(value)
+  const rounded = roundMoney(value)
+  // `rounded < 0` and not Object.is(-0): -0 is not a debt, and '-0,00' on a
+  // price list is a typo, not information.
+  const sign = rounded < 0 ? '-' : ''
+  const [whole, fraction] = Math.abs(rounded).toFixed(2).split('.')
+
+  // A dot before every run of three digits that reaches the end of the
+  // number. \B keeps it from landing in front of the first digit, so 123
+  // stays '123' rather than becoming '.123'.
+  const grouped = whole!.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+
+  return `${sign}${grouped},${fraction}`
 }

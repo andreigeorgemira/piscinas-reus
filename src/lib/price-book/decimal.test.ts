@@ -94,7 +94,37 @@ describe('formatMoney', () => {
     expect(formatMoney(48)).toBe('48,00')
   })
 
-  it('formats without thousands grouping', () => {
-    expect(formatMoney(1234.5)).toBe('1234,50')
+  it('groups thousands with a dot', () => {
+    expect(formatMoney(1234.5)).toBe('1.234,50')
+  })
+
+  it('groups every three digits, not just the first thousand', () => {
+    expect(formatMoney(1234567.5)).toBe('1.234.567,50')
+  })
+
+  it('leaves a three-digit amount ungrouped', () => {
+    expect(formatMoney(999.99)).toBe('999,99')
+  })
+
+  it('groups a four-digit amount, whatever ICU would have done', () => {
+    // Spanish sets minimumGroupingDigits to 2, so Intl.NumberFormat renders
+    // this as '1234,00' on some builds. The company reads '1.000,00'.
+    expect(formatMoney(1000)).toBe('1.000,00')
+  })
+
+  it('keeps the sign in front of the grouped amount', () => {
+    expect(formatMoney(-1234.5)).toBe('-1.234,50')
+  })
+
+  it('never renders a negative zero', () => {
+    expect(formatMoney(-0)).toBe('0,00')
+  })
+
+  it('rounds to two decimals rather than truncating', () => {
+    expect(formatMoney(1234.567)).toBe('1.234,57')
+  })
+
+  it('round-trips through parseDecimal', () => {
+    expect(parseDecimal(formatMoney(1234567.89))).toBe(1234567.89)
   })
 })
