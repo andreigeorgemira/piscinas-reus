@@ -11,14 +11,9 @@ export const metadata: Metadata = { title: 'Panel' }
  */
 const SHORTCUTS = [
   {
-    href: '/admin/price-book',
-    title: 'Tarifario',
-    description: 'Conceptos, grupos, coste y precio de referencia.',
-  },
-  {
-    href: '/admin/price-book/import',
-    title: 'Importar tarifario',
-    description: 'Cargar o actualizar conceptos desde un CSV.',
+    href: '/admin/price-books',
+    title: 'Tarifarios',
+    description: 'Los catálogos de precios: grupos, conceptos, coste y precio.',
   },
 ]
 

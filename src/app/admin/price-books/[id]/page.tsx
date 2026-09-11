@@ -1,22 +1,24 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { PageHeader } from '@/app/admin/page-header'
+import { GroupSection } from '@/app/admin/price-book/group-section'
+import { GroupsOpenProvider, ToggleAllGroups } from '@/app/admin/price-book/groups-open'
+import { PRICE_BOOK_COLUMNS } from '@/app/admin/price-book/item-fields'
+import { NewGroupForm } from '@/app/admin/price-book/new-group-form'
 import { ACTION_BAR_FORM_ID, ActionBar, FilterChip } from '@/components/ui/action-bar'
 import { PAGE_SIZES, Paginator } from '@/components/ui/paginator'
 import { DataTable, TableEmpty } from '@/components/ui/table'
 import { requireAdmin } from '@/lib/auth/require-admin'
+import { parseDecimal } from '@/lib/price-book/decimal'
 import {
+  getPriceBook,
   listPriceBook,
   UNGROUPED_FILTER,
   UNGROUPED_NAME,
   type ActiveFilter,
 } from '@/lib/price-book/queries'
-import { parseDecimal } from '@/lib/price-book/decimal'
 import { UNIT_LABELS, UNIT_TYPES, type UnitType } from '@/lib/price-book/schema'
-import { GroupSection } from './group-section'
-import { GroupsOpenProvider, ToggleAllGroups } from './groups-open'
-import { PRICE_BOOK_COLUMNS } from './item-fields'
-import { NewGroupForm } from './new-group-form'
 
 export const metadata: Metadata = { title: 'Tarifario' }
 
@@ -40,62 +42,62 @@ type Query = {
   page: number
 }
 
-/**
- * Builds an address for this screen with some of the query changed.
- *
- * Defaults stay out of the URL - page 1, the default page size, "todos" -
- * so the plain address and the address of the first unfiltered page are the
- * same string, and a link someone pastes into a chat is as short as it can
- * honestly be.
- */
-function href(query: Query, changes: Partial<Query> = {}): string {
-  const next = { ...query, ...changes }
-  const params = new URLSearchParams()
-  if (next.q) params.set('q', next.q)
-  if (next.group) params.set('group', next.group)
-  if (next.unit) params.set('unit', next.unit)
-  if (next.costMin) params.set('costMin', next.costMin)
-  if (next.costMax) params.set('costMax', next.costMax)
-  if (next.active !== 'all') params.set('active', next.active)
-  if (next.size !== PAGE_SIZES[1]) params.set('size', String(next.size))
-  if (next.page > 1) params.set('page', String(next.page))
-  const search = params.toString()
-  return search ? `/admin/price-book?${search}` : '/admin/price-book'
-}
+export default async function PriceBookDetailPage({
+  params,
+  searchParams,
+}: PageProps<'/admin/price-books/[id]'>) {
+  const { id } = await params
+  const search = await searchParams
 
-export default async function PriceBookPage({ searchParams }: PageProps<'/admin/price-book'>) {
-  const params = await searchParams
-
-  const requestedSize = Number.parseInt(firstValue(params.size), 10)
-  const requestedPage = Number.parseInt(firstValue(params.page), 10)
-  const requestedActive = firstValue(params.active)
-  const requestedUnit = firstValue(params.unit)
+  const requestedSize = Number.parseInt(firstValue(search.size), 10)
+  const requestedPage = Number.parseInt(firstValue(search.page), 10)
+  const requestedActive = firstValue(search.active)
+  const requestedUnit = firstValue(search.unit)
 
   const query: Query = {
-    q: firstValue(params.q).trim(),
-    group: firstValue(params.group),
+    q: firstValue(search.q).trim(),
+    group: firstValue(search.group),
     // Anything not in the enum is dropped rather than passed to the database:
     // the value reaches an .eq() on an enum column, and a typo in a pasted
     // URL should show the catalogue, not an error.
     unit: (UNIT_TYPES as readonly string[]).includes(requestedUnit) ? requestedUnit : '',
-    costMin: firstValue(params.costMin).trim(),
-    costMax: firstValue(params.costMax).trim(),
+    costMin: firstValue(search.costMin).trim(),
+    costMax: firstValue(search.costMax).trim(),
     active: requestedActive === 'active' || requestedActive === 'retired' ? requestedActive : 'all',
     size: PAGE_SIZES.includes(requestedSize) ? requestedSize : PAGE_SIZES[1]!,
     page: Number.isFinite(requestedPage) && requestedPage > 1 ? requestedPage : 1,
   }
 
+  const base = `/admin/price-books/${id}`
+
+  /**
+   * Builds an address for this screen with some of the query changed.
+   *
+   * Defaults stay out of the URL - page 1, the default page size, "todos" -
+   * so the plain address and the address of the first unfiltered page are the
+   * same string.
+   */
+  function href(changes: Partial<Query> = {}): string {
+    const next = { ...query, ...changes }
+    const params = new URLSearchParams()
+    if (next.q) params.set('q', next.q)
+    if (next.group) params.set('group', next.group)
+    if (next.unit) params.set('unit', next.unit)
+    if (next.costMin) params.set('costMin', next.costMin)
+    if (next.costMax) params.set('costMax', next.costMax)
+    if (next.active !== 'all') params.set('active', next.active)
+    if (next.size !== PAGE_SIZES[1]) params.set('size', String(next.size))
+    if (next.page > 1) params.set('page', String(next.page))
+    const queryString = params.toString()
+    return queryString ? `${base}?${queryString}` : base
+  }
+
   const supabase = await requireAdmin()
-  const listing = await listPriceBook(supabase, {
-    search: query.q,
-    groupId: query.group === '' ? null : query.group,
-    unit: query.unit === '' ? null : (query.unit as UnitType),
-    costMin: parseDecimal(query.costMin),
-    costMax: parseDecimal(query.costMax),
-    active: query.active,
-    page: query.page,
-    pageSize: query.size,
-  })
+
+  const book = await getPriceBook(supabase, id)
+  if (!book) {
+    notFound()
+  }
 
   const filterCount =
     (query.group ? 1 : 0) +
@@ -106,6 +108,21 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
 
   const filtering = filterCount > 0 || query.q !== ''
 
+  const listing = await listPriceBook(supabase, {
+    priceBookId: id,
+    search: query.q,
+    groupId: query.group === '' ? null : query.group,
+    unit: query.unit === '' ? null : (query.unit as UnitType),
+    costMin: parseDecimal(query.costMin),
+    costMax: parseDecimal(query.costMax),
+    active: query.active,
+    page: query.page,
+    // Unfiltered, the whole book is on one screen: a group split across two
+    // pages is a group whose concepts you cannot see together. A search is
+    // different -- it has no groups to keep whole -- so it pages.
+    pageSize: filtering ? query.size : null,
+  })
+
   const groupName =
     query.group === UNGROUPED_FILTER
       ? UNGROUPED_NAME
@@ -115,19 +132,14 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
   // that one. The badge on the button says how many; these say which.
   const chips = [
     query.group && groupName ? (
-      <FilterChip
-        key="group"
-        label="Grupo"
-        value={groupName}
-        href={href(query, { group: '', page: 1 })}
-      />
+      <FilterChip key="group" label="Grupo" value={groupName} href={href({ group: '', page: 1 })} />
     ) : null,
     query.unit ? (
       <FilterChip
         key="unit"
         label="Unidad"
         value={UNIT_LABELS[query.unit as UnitType]}
-        href={href(query, { unit: '', page: 1 })}
+        href={href({ unit: '', page: 1 })}
       />
     ) : null,
     query.costMin || query.costMax ? (
@@ -141,7 +153,7 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
               ? `desde ${query.costMin} €`
               : `hasta ${query.costMax} €`
         }
-        href={href(query, { costMin: '', costMax: '', page: 1 })}
+        href={href({ costMin: '', costMax: '', page: 1 })}
       />
     ) : null,
     query.active !== 'all' ? (
@@ -149,17 +161,14 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
         key="active"
         label="Estado"
         value={query.active === 'active' ? 'Solo activos' : 'Solo retirados'}
-        href={href(query, { active: 'all', page: 1 })}
+        href={href({ active: 'all', page: 1 })}
       />
     ) : null,
   ].filter(Boolean)
 
-  // A group with nothing on this page is worth a heading only when the screen
-  // is showing the catalogue whole: that is the empty group a staff member
-  // just created and is about to fill. Under a filter, or on page two, an
-  // empty heading says nothing and costs a screenful.
-  const showEmptyGroups = !filtering && listing.page === 1
-  const sections = listing.groups.filter((section) => section.items.length > 0 || showEmptyGroups)
+  // Every group shows, whatever the page: that is the whole point of not
+  // paging the grouped view. Under a filter, only the groups with a match.
+  const sections = listing.groups.filter((section) => section.items.length > 0 || !filtering)
 
   const nextPosition =
     listing.allGroups.length === 0
@@ -172,13 +181,33 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
   return (
     <>
       <PageHeader
-        title="Tarifario"
+        title={book.name}
         meta={
           filtering
             ? `${listing.itemsTotal} ${listing.itemsTotal === 1 ? 'resultado' : 'resultados'}`
-            : `${listing.itemsTotal} conceptos · ${listing.allGroups.length} grupos`
+            : `${book.itemCount} conceptos · ${book.groupCount} grupos`
         }
-      />
+      >
+        <Link
+          href="/admin/price-books"
+          className="flex h-8 items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 text-xs font-medium text-ink-soft transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M9.8 3.6 5.4 8l4.4 4.4" />
+          </svg>
+          Todos los tarifarios
+        </Link>
+      </PageHeader>
 
       <div className="min-h-0 flex-1 p-5">
         <GroupsOpenProvider>
@@ -186,13 +215,13 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
             columns={PRICE_BOOK_COLUMNS}
             toolbar={
               <ActionBar
-                action="/admin/price-book"
+                action={base}
                 searchValue={query.q}
                 searchLabel="Buscar en el tarifario"
                 searchPlaceholder="Buscar código, concepto o descripción"
                 hidden={query.size === PAGE_SIZES[1] ? undefined : { size: String(query.size) }}
                 filterCount={filterCount}
-                onClearFilters={href(query, {
+                onClearFilters={href({
                   group: '',
                   unit: '',
                   costMin: '',
@@ -283,7 +312,7 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
               >
                 <ToggleAllGroups />
                 <Link
-                  href="/admin/price-book/import"
+                  href={`${base}/import`}
                   className="flex h-9 items-center gap-2 rounded-lg border border-accent/40 bg-accent-soft px-3 text-xs font-medium text-accent transition-colors hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   <svg
@@ -311,7 +340,7 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
                   message={
                     filtering
                       ? 'Ningún concepto coincide con la búsqueda.'
-                      : 'El tarifario está vacío. Crea un grupo para empezar.'
+                      : 'Este tarifario está vacío. Crea un grupo para empezar.'
                   }
                   icon={
                     <svg
@@ -331,7 +360,7 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
                   }
                 >
                   {filtering ? (
-                    <Link href="/admin/price-book" className="text-xs text-accent underline">
+                    <Link href={base} className="text-xs text-accent underline">
                       Ver el tarifario entero
                     </Link>
                   ) : null}
@@ -340,26 +369,37 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
             }
             footer={
               <>
-                <NewGroupForm nextPosition={nextPosition} />
-                <Paginator
-                  page={listing.page}
-                  pageCount={listing.pageCount}
-                  pageSize={listing.pageSize}
-                  shown={listing.itemsShown}
-                  total={listing.itemsTotal}
-                  noun="conceptos"
-                  pageHrefs={{
-                    previous: listing.page > 1 ? href(query, { page: listing.page - 1 }) : null,
-                    next:
-                      listing.page < listing.pageCount
-                        ? href(query, { page: listing.page + 1 })
-                        : null,
-                  }}
-                  sizeHrefs={PAGE_SIZES.map((size) => ({
-                    size,
-                    href: href(query, { size, page: 1 }),
-                  }))}
-                />
+                {/*
+                  PostgREST caps a response at 1000 rows, so an unpaged read
+                  of a very large book is a slice. Saying so is the whole
+                  point of the flag: a slice that stays quiet is the bug.
+                */}
+                {listing.capped ? (
+                  <p className="border-t border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn">
+                    Este tarifario tiene {listing.itemsTotal} conceptos y la pantalla muestra los{' '}
+                    {listing.itemsShown} primeros. Busca o filtra para llegar al resto.
+                  </p>
+                ) : null}
+                <NewGroupForm priceBookId={id} nextPosition={nextPosition} />
+                {filtering ? (
+                  <Paginator
+                    page={listing.page}
+                    pageCount={listing.pageCount}
+                    pageSize={listing.pageSize}
+                    shown={listing.itemsShown}
+                    total={listing.itemsTotal}
+                    noun="conceptos"
+                    pageHrefs={{
+                      previous: listing.page > 1 ? href({ page: listing.page - 1 }) : null,
+                      next:
+                        listing.page < listing.pageCount ? href({ page: listing.page + 1 }) : null,
+                    }}
+                    sizeHrefs={PAGE_SIZES.map((size) => ({
+                      size,
+                      href: href({ size, page: 1 }),
+                    }))}
+                  />
+                ) : null}
               </>
             }
           >
@@ -368,12 +408,8 @@ export default async function PriceBookPage({ searchParams }: PageProps<'/admin/
                 key={section.id ?? 'ungrouped'}
                 group={section}
                 groups={listing.allGroups}
-                paginated={listing.pageCount > 1}
+                priceBookId={id}
                 filtering={filtering}
-                groupHref={href(query, {
-                  group: section.id ?? UNGROUPED_FILTER,
-                  page: 1,
-                })}
               />
             ))}
           </DataTable>

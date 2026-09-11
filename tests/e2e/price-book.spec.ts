@@ -81,6 +81,35 @@ async function createGroup(page: Page, name: string) {
   await page.getByRole('button', { name: 'Crear grupo' }).click()
 }
 
+/**
+ * Opens the catalogue seeded by supabase/seed.sql. The screens moved under
+ * /admin/price-books/<id> when a business stopped having exactly one
+ * catalogue (0012_price_books.sql), and the id is generated, so the way in
+ * is the list.
+ */
+/**
+ * The book every fixture in this file writes into: the one the seed leaves
+ * behind. Groups and concepts have belonged to a book since
+ * 0012_price_books.sql, and the column is not nullable.
+ */
+async function seededBookId(): Promise<string> {
+  const { data, error } = await adminDb()
+    .from('price_books')
+    .select('id')
+    .order('position')
+    .limit(1)
+    .single()
+  if (error) throw error
+  return data.id
+}
+
+async function gotoPriceBook(page: Page): Promise<string> {
+  await page.goto('/admin/price-books')
+  await page.getByRole('link', { name: 'Tarifario general' }).click()
+  await expect(page).toHaveURL(/\/admin\/price-books\/[0-9a-f-]+/)
+  return new URL(page.url()).pathname
+}
+
 async function loginAsStaff(page: Page) {
   await page.goto('/login')
   await page.getByLabel('Correo electrónico').fill(staffEmail)
@@ -100,14 +129,14 @@ async function loginAsClient(page: Page) {
 test('redirects a client away from the price book', async ({ page }) => {
   await loginAsClient(page)
 
-  await page.goto('/admin/price-book')
+  await page.goto('/admin/price-books')
   await expect(page).toHaveURL(/\/portal/)
   await expect(page.getByRole('heading', { name: 'Tarifario' })).toBeHidden()
 })
 
 test('creates a group, adds a concept and edits its price inline', async ({ page }) => {
   await loginAsStaff(page)
-  await page.goto('/admin/price-book')
+  await gotoPriceBook(page)
 
   const groupName = `Grupo E2E ${runId}`
   const itemName = `Concepto E2E ${runId}`
@@ -148,7 +177,7 @@ test('creates a group, adds a concept and edits its price inline', async ({ page
 
 test('reports a duplicate code in Spanish instead of crashing', async ({ page }) => {
   await loginAsStaff(page)
-  await page.goto('/admin/price-book')
+  await gotoPriceBook(page)
 
   const groupName = `Grupo Duplicado ${runId}`
   const code = `DUP-${runId}`
@@ -202,14 +231,17 @@ test('retires and reactivates a concept', async ({ page }) => {
   const groupName = `Grupo Retirada ${runId}`
   const itemName = `Concepto Retirada ${runId}`
 
+  const bookId = await seededBookId()
+
   const { data: group, error: groupError } = await admin
     .from('price_book_groups')
-    .insert({ name: groupName })
+    .insert({ price_book_id: bookId, name: groupName })
     .select('id')
     .single()
   if (groupError) throw groupError
 
   const { error: itemError } = await admin.from('price_book_items').insert({
+    price_book_id: bookId,
     group_id: group!.id,
     code: `RET-${runId}`,
     name: itemName,
@@ -221,7 +253,7 @@ test('retires and reactivates a concept', async ({ page }) => {
   if (itemError) throw itemError
 
   await loginAsStaff(page)
-  await page.goto('/admin/price-book')
+  await gotoPriceBook(page)
 
   const region = page.getByRole('rowgroup', { name: groupName })
   // A live filter, not a snapshot: it is re-evaluated on every assertion
@@ -248,7 +280,9 @@ test('refuses the import screen and its writes to a non-admin', async ({ page })
 
   await loginAsClient(page)
 
-  await page.goto('/admin/price-book/import')
+  // A book id this client could never have read: requireAdmin turns them
+  // away before the screen ever looks one up, which is the point.
+  await page.goto('/admin/price-books/00000000-0000-0000-0000-000000000000/import')
   await expect(page).toHaveURL(/\/portal/)
   await expect(page.getByLabel(csvLabel)).toHaveCount(0)
 
@@ -267,10 +301,20 @@ test('refuses the import screen and its writes to a non-admin', async ({ page })
   const signIn = await clientDb.auth.signInWithPassword({ email: clientEmail, password })
   if (signIn.error) throw signIn.error
 
-  const groupWrite = await clientDb.from('price_book_groups').insert({ name: groupName })
+  const { data: book } = await admin
+    .from('price_books')
+    .select('id')
+    .order('position')
+    .limit(1)
+    .single()
+
+  const groupWrite = await clientDb
+    .from('price_book_groups')
+    .insert({ price_book_id: book!.id, name: groupName })
   expect(groupWrite.error?.code).toBe('42501')
 
   const itemWrite = await clientDb.from('price_book_items').insert({
+    price_book_id: book!.id,
     code: `PROH-${runId}`,
     name: itemName,
     unit: 'hour',
@@ -299,7 +343,8 @@ test('refuses the import screen and its writes to a non-admin', async ({ page })
 
 test('imports a CSV that creates its own group and price', async ({ page }) => {
   await loginAsStaff(page)
-  await page.goto('/admin/price-book/import')
+  const bookPath = await gotoPriceBook(page)
+  await page.goto(`${bookPath}/import`)
 
   const groupName = `Grupo Importado ${runId}`
   const itemName = `Concepto Importado ${runId}`
@@ -318,7 +363,7 @@ test('imports a CSV that creates its own group and price', async ({ page }) => {
   ).toBeVisible()
 
   await page.getByRole('link', { name: 'Ver el tarifario' }).click()
-  await expect(page).toHaveURL(/\/admin\/price-book$/)
+  await expect(page).toHaveURL(/\/admin\/price-books\/[0-9a-f-]+$/)
 
   // Searched rather than read off the first page: the catalogue holds more
   // than one page of concepts by the time this test runs, and where the
@@ -332,7 +377,8 @@ test('imports a CSV that creates its own group and price', async ({ page }) => {
 
 test('reports a bad price by line number and hides the import button', async ({ page }) => {
   await loginAsStaff(page)
-  await page.goto('/admin/price-book/import')
+  const bookPath = await gotoPriceBook(page)
+  await page.goto(`${bookPath}/import`)
 
   const csv = `concepto;unidad;coste;precio\nItem malo ${runId};hora;abc;30,00`
   await page.getByLabel(csvLabel).fill(csv)
@@ -358,6 +404,7 @@ test('re-importing the same file keeps the coded row, duplicates the codeless on
   const { data: seeded, error: seedError } = await admin
     .from('price_book_items')
     .insert({
+      price_book_id: await seededBookId(),
       code,
       name: `Nombre original ${runId}`,
       description,
@@ -381,7 +428,8 @@ test('re-importing the same file keeps the coded row, duplicates the codeless on
     `${codelessName};hora;5,00;8,00;${groupName};`
 
   await loginAsStaff(page)
-  await page.goto('/admin/price-book/import')
+  const bookPath = await gotoPriceBook(page)
+  await page.goto(`${bookPath}/import`)
   const textarea = page.getByLabel(csvLabel)
 
   await textarea.fill(csv)
@@ -417,7 +465,7 @@ test('re-importing the same file keeps the coded row, duplicates the codeless on
   expect(codelessAfterFirst).toHaveLength(1)
 
   // Re-run the exact same file.
-  await page.goto('/admin/price-book/import')
+  await page.goto(`${bookPath}/import`)
   await textarea.fill(csv)
   await page.getByRole('button', { name: 'Comprobar', exact: true }).click()
   await page.getByRole('button', { name: 'Importar 2 conceptos', exact: true }).click()
@@ -451,7 +499,8 @@ test('commits what the preview showed, not what the textarea holds when Importar
   page,
 }) => {
   await loginAsStaff(page)
-  await page.goto('/admin/price-book/import')
+  const bookPath = await gotoPriceBook(page)
+  await page.goto(`${bookPath}/import`)
 
   const previewedName = `Concepto Previsto ${runId}`
   const editedName = `Concepto Alterado ${runId}`
@@ -489,20 +538,24 @@ test('commits what the preview showed, not what the textarea holds when Importar
   expect(edited).toHaveLength(0)
 })
 
-test('pages through a catalogue too big for one screen', async ({ page }) => {
-  // The one screen-level proof that a catalogue past PostgREST's max_rows
-  // (1000, supabase/config.toml) is reachable rather than silently cut off:
-  // the screen asks for a page at a time and the pager walks the rest.
+test('pages a search through a catalogue too big for one screen', async ({ page }) => {
+  // Two things at once, because they share an expensive fixture: that a
+  // search pages, and that an unfiltered screen which cannot show everything
+  // says so. PostgREST returns at most max_rows rows (1000,
+  // supabase/config.toml), and the grouped view asks for the whole book on
+  // purpose -- a group split across pages is a group you cannot read.
   //
   // Seeded and torn down inside this test. 1001 extra concepts push every
-  // other row this file creates off the first page, so leaving them behind
-  // would break the tests around it. That is safe here because tests in one
-  // file run serially (fullyParallel: false in playwright.config.ts) and
-  // auth.spec.ts -- the only file that can run alongside this one -- never
-  // opens this screen.
+  // other row this file creates off the first page of any search, so leaving
+  // them behind would break the tests around it. That is safe here because
+  // tests in one file run serially (fullyParallel: false in
+  // playwright.config.ts) and auth.spec.ts -- the only file that can run
+  // alongside this one -- never opens this screen.
   const admin = adminDb()
   const marker = `Relleno ${runId}`
+  const bookId = await seededBookId()
   const bulk = Array.from({ length: 1001 }, (_, index) => ({
+    price_book_id: bookId,
     code: `FILL-${runId}-${String(index).padStart(4, '0')}`,
     name: `${marker} ${index}`,
     unit: 'unit' as const,
@@ -516,8 +569,14 @@ test('pages through a catalogue too big for one screen', async ({ page }) => {
 
   try {
     await loginAsStaff(page)
-    await page.goto('/admin/price-book')
+    const bookPath = await gotoPriceBook(page)
 
+    // Unfiltered: the whole book on one screen, and an honest line when the
+    // server could not hand over all of it.
+    await expect(page.getByText(/muestra los 1000 primeros/)).toBeVisible()
+
+    // Searching pages, because a result set has no groups to keep whole.
+    await page.goto(`${bookPath}?q=FILL-${runId}`)
     const pager = page.getByRole('navigation', { name: 'Páginas de conceptos' })
     await expect(pager.getByText(/Mostrando 25 de \d+ conceptos/)).toBeVisible()
     await expect(pager.getByText('1 /')).toBeVisible()
@@ -547,7 +606,7 @@ test('finds a concept by code and keeps the search in the address', async ({ pag
   const itemName = `Concepto buscado ${runId}`
 
   await loginAsStaff(page)
-  await page.goto('/admin/price-book')
+  await gotoPriceBook(page)
 
   await createGroup(page, groupName)
 

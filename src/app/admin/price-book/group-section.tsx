@@ -54,18 +54,15 @@ const idleFormState: FormState = { ...idleState, session: -1 }
 export function GroupSection({
   group,
   groups,
-  paginated,
+  priceBookId,
   filtering,
-  groupHref,
 }: {
   group: PriceBookGroup
   groups: GroupOption[]
-  /** True when the catalogue runs to more than one page. */
-  paginated: boolean
+  /** The book this group belongs to; every write carries it. */
+  priceBookId: string
   /** True when a search or a filter is narrowing the screen. */
   filtering: boolean
-  /** Address that filters the screen down to this group alone. */
-  groupHref: string
 }) {
   const groupId = group.id
   const newItemFormId = `new-item-${groupId ?? 'ungrouped'}`
@@ -167,7 +164,6 @@ export function GroupSection({
    * the screen is deliberately not showing.
    */
   const shownCount = filtering ? group.items.length : group.itemCount
-  const offPage = !filtering && group.itemCount > group.items.length
 
   const renameError = renameState.session === renaming.session ? renameState.error : null
   const addError = addState.session === adding.session ? addState.error : null
@@ -211,6 +207,61 @@ export function GroupSection({
             }`}
           >
             <div className="flex items-center gap-1.5">
+              {renaming.open && groupId !== null ? (
+                /*
+                  Renaming happens where the name is. The old form unfolded a
+                  row of its own under the heading, which moved the whole
+                  catalogue down to change one word.
+                */
+                <form
+                  action={renameAction}
+                  onReset={(event) => event.preventDefault()}
+                  className="flex items-center gap-1.5"
+                >
+                  <input type="hidden" name="id" value={groupId} />
+                  {/*
+                    updateGroup writes the whole row, so the position has to
+                    travel with the name or every rename would reset it.
+                  */}
+                  <input type="hidden" name="position" value={group.position} />
+                  <input
+                    name="name"
+                    aria-label={`Nombre de ${group.name}`}
+                    defaultValue={group.name}
+                    maxLength={80}
+                    autoFocus
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') setRenaming(false)
+                    }}
+                    className={`${FIELD_CLASS} h-7 w-64 text-xs font-semibold tracking-[0.04em] uppercase`}
+                  />
+                  <button
+                    type="submit"
+                    disabled={renamingPending}
+                    aria-label="Guardar el nombre"
+                    className={ICON_BUTTON_CLASS}
+                  >
+                    <svg {...ICON_PROPS} strokeWidth={2}>
+                      <path d="m3.2 8.4 3.2 3.2 6.4-6.8" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRenaming(false)}
+                    aria-label="Cancelar"
+                    className={ICON_BUTTON_CLASS}
+                  >
+                    <svg {...ICON_PROPS} strokeWidth={2}>
+                      <path d="m4 4 8 8M12 4l-8 8" />
+                    </svg>
+                  </button>
+                  {renameError ? (
+                    <span role="alert" className="text-2xs font-normal normal-case text-danger">
+                      {renameError}
+                    </span>
+                  ) : null}
+                </form>
+              ) : (
               <button
                 type="button"
                 onClick={() => setOpen(!open)}
@@ -244,6 +295,7 @@ export function GroupSection({
                   </span>
                 ) : null}
               </button>
+              )}
 
               <div className="ml-auto flex items-center gap-1.5">
                 {groupId === null ? null : (
@@ -287,58 +339,6 @@ export function GroupSection({
           </th>
         </tr>
 
-        {open && renaming.open && groupId !== null ? (
-          <tr>
-            <td
-              colSpan={ITEM_TABLE_COLUMN_COUNT}
-              className="border-b border-line-soft bg-canvas p-3"
-            >
-              <form
-                action={renameAction}
-                onReset={(event) => event.preventDefault()}
-                className="flex flex-wrap items-end gap-2"
-              >
-                <input type="hidden" name="id" value={groupId} />
-                <label className="flex flex-col gap-1">
-                  <span className="text-2xs text-muted">Nombre</span>
-                  <input
-                    name="name"
-                    aria-label="Nombre"
-                    defaultValue={group.name}
-                    maxLength={80}
-                    autoFocus
-                    className={`${FIELD_CLASS} w-56`}
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-2xs text-muted">Posición</span>
-                  <input
-                    name="position"
-                    type="number"
-                    aria-label="Posición"
-                    defaultValue={group.position}
-                    min={0}
-                    max={9999}
-                    step={1}
-                    className={`${FIELD_CLASS} num w-20`}
-                  />
-                </label>
-                <button type="submit" disabled={renamingPending} className={PRIMARY_BUTTON_CLASS}>
-                  {renamingPending ? 'Guardando…' : 'Guardar'}
-                </button>
-                <button type="button" onClick={() => setRenaming(false)} className={BUTTON_CLASS}>
-                  Cancelar
-                </button>
-                {renameError ? (
-                  <p role="alert" className="w-full text-xs text-danger">
-                    {renameError}
-                  </p>
-                ) : null}
-              </form>
-            </td>
-          </tr>
-        ) : null}
-
         {open
           ? group.items.map((item) => (
               <ItemRow key={item.id} item={item} groups={groups} groupName={group.name} />
@@ -361,6 +361,7 @@ export function GroupSection({
                     is no select for it: if it lands in the wrong place, the
                     handle in the first column moves it in one drag.
                   */}
+                  <input type="hidden" name="price_book_id" value={priceBookId} />
                   <input type="hidden" name="group_id" value={groupId ?? ''} />
                   <button type="submit" disabled={addPending} className={PRIMARY_BUTTON_CLASS}>
                     {addPending ? 'Añadiendo…' : 'Añadir'}
@@ -411,28 +412,15 @@ export function GroupSection({
                   </svg>
                   {group.items.length > 0
                     ? 'Añadir concepto'
-                    : offPage
-                      ? `Sus ${group.itemCount} conceptos están en otras páginas. Añadir uno`
-                      : paginated
-                        ? 'Sin conceptos de este grupo en esta página. Añadir uno'
-                        : 'Este grupo no tiene conceptos. Añade el primero.'}
+                    : filtering
+                      ? 'Ningún concepto de este grupo coincide. Añadir uno'
+                      : 'Este grupo no tiene conceptos. Añade el primero.'}
                 </button>
                 {/*
                 A group whose concepts all sit on another page must not be
                 described as empty -- it is not. The link is the way to see
                 the ones this page is not showing.
               */}
-                {group.items.length === 0 && paginated ? (
-                  <a
-                    href={groupHref}
-                    className="flex h-6 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-2xs text-ink-soft transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                  >
-                    <svg {...ICON_PROPS} width={11} height={11} className="text-faint">
-                      <path d="M2.4 3.6h11.2L9.4 8.4v4.2l-2.8 1.4V8.4Z" />
-                    </svg>
-                    Ver solo este grupo
-                  </a>
-                ) : null}
               </div>
             </td>
           </tr>

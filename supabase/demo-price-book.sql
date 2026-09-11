@@ -13,7 +13,9 @@
 -- Re-runnable. Groups are matched by name and items by code, so running it
 -- twice updates rather than duplicates.
 
-insert into public.price_book_groups (name, position) values
+insert into public.price_book_groups (price_book_id, name, position)
+select b.id, v.name, v.position
+from (values
   ('Movimiento de tierras',  1),
   ('Estructura',             2),
   ('Revestimiento',          3),
@@ -24,11 +26,13 @@ insert into public.price_book_groups (name, position) values
   ('Accesorios',             8),
   ('Mano de obra',           9),
   ('Mantenimiento',         10)
-on conflict (name) do update set position = excluded.position;
+) as v(name, position)
+cross join (select id from public.price_books order by position, created_at limit 1) b
+on conflict (price_book_id, name) do update set position = excluded.position;
 
 insert into public.price_book_items
-  (group_id, code, name, description, unit, unit_cost, unit_price, is_active)
-select g.id, v.code, v.name, v.description, v.unit::unit_type, v.cost, v.price, v.active
+  (price_book_id, group_id, code, name, description, unit, unit_cost, unit_price, is_active)
+select g.price_book_id, g.id, v.code, v.name, v.description, v.unit::unit_type, v.cost, v.price, v.active
 from (values
   ('Movimiento de tierras', 'EXC-001', 'Excavacion vaso piscina',      'Excavacion con retroexcavadora y retirada de tierras',   'm2',    28.00,   48.00, true),
   ('Movimiento de tierras', 'EXC-002', 'Transporte de tierras',        'Portes a vertedero autorizado',                         'lot',  220.00,  380.00, true),
@@ -118,7 +122,7 @@ from (values
   ('Mantenimiento',         'MAN-010', 'Sal para electrolisis 25 kg',  'Saco de 25 kg',                                         'unit',   9.00,   18.00, true)
 ) as v(group_name, code, name, description, unit, cost, price, active)
 join public.price_book_groups g on g.name = v.group_name
-on conflict (code) do update set
+on conflict (price_book_id, code) do update set
   group_id    = excluded.group_id,
   name        = excluded.name,
   description = excluded.description,

@@ -21,8 +21,8 @@ const ITEMS: NavItem[] = [
     icon: <path d="M2.5 6.8 8 2.5l5.5 4.3v6.2a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8Z" />,
   },
   {
-    href: '/admin/price-book',
-    label: 'Tarifario',
+    href: '/admin/price-books',
+    label: 'Tarifarios',
     icon: (
       <>
         <path d="M8.4 1.9H3.1a1.2 1.2 0 0 0-1.2 1.2v5.3c0 .3.1.6.4.8l5.6 5.6a1.2 1.2 0 0 0 1.7 0l4.5-4.5a1.2 1.2 0 0 0 0-1.7L8.5 3a1.2 1.2 0 0 0-.1-1.1Z" />

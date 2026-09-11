@@ -26,6 +26,7 @@ const DUPLICATE_GROUP_NAME = 'Ya existe un grupo con ese nombre.'
 const INVALID_GROUP_ID = 'El grupo no es válido.'
 const DUPLICATE_ITEM_CODE = 'Ya existe un concepto con ese código.'
 const INVALID_ITEM_ID = 'El concepto no es válido.'
+const INVALID_BOOK_ID = 'El tarifario no es válido.'
 
 /**
  * A form field that names a row (`id`, later `group_id`) is attacker
@@ -74,7 +75,16 @@ export async function createGroup(
     return { error: firstIssue(parsed.error) }
   }
 
+  // Which book this group belongs to comes from a hidden field, and is
+  // checked here rather than trusted: a Server Function is a POST endpoint,
+  // and the value reaches a not-null foreign key either way.
+  const priceBookId = readId(formData, 'price_book_id')
+  if (priceBookId === null) {
+    return { error: INVALID_BOOK_ID }
+  }
+
   const { error } = await supabase.from('price_book_groups').insert({
+    price_book_id: priceBookId,
     name: parsed.data.name,
     position: parsed.data.position,
   })
@@ -83,7 +93,9 @@ export async function createGroup(
     return { error: describeWriteError(error, DUPLICATE_GROUP_NAME) }
   }
 
-  revalidatePath('/admin/price-book')
+  // Every book's screen, because most of these writes know the row they
+  // touched but not which catalogue it hangs from.
+  revalidatePath('/admin/price-books', 'layout')
   return idleState
 }
 
@@ -112,7 +124,9 @@ export async function updateGroup(
     return { error: describeWriteError(error, DUPLICATE_GROUP_NAME) }
   }
 
-  revalidatePath('/admin/price-book')
+  // Every book's screen, because most of these writes know the row they
+  // touched but not which catalogue it hangs from.
+  revalidatePath('/admin/price-books', 'layout')
   return idleState
 }
 
@@ -143,7 +157,9 @@ export async function deleteGroup(
     return { error: describeWriteError(error, DUPLICATE_GROUP_NAME) }
   }
 
-  revalidatePath('/admin/price-book')
+  // Every book's screen, because most of these writes know the row they
+  // touched but not which catalogue it hangs from.
+  revalidatePath('/admin/price-books', 'layout')
   return idleState
 }
 
@@ -158,13 +174,22 @@ export async function createItem(
     return { error: firstIssue(parsed.error) }
   }
 
-  const { error } = await supabase.from('price_book_items').insert(itemInputToRow(parsed.data))
+  const priceBookId = readId(formData, 'price_book_id')
+  if (priceBookId === null) {
+    return { error: INVALID_BOOK_ID }
+  }
+
+  const { error } = await supabase
+    .from('price_book_items')
+    .insert({ ...itemInputToRow(parsed.data), price_book_id: priceBookId })
 
   if (error) {
     return { error: describeWriteError(error, DUPLICATE_ITEM_CODE) }
   }
 
-  revalidatePath('/admin/price-book')
+  // Every book's screen, because most of these writes know the row they
+  // touched but not which catalogue it hangs from.
+  revalidatePath('/admin/price-books', 'layout')
   return idleState
 }
 
@@ -193,7 +218,9 @@ export async function updateItem(
     return { error: describeWriteError(error, DUPLICATE_ITEM_CODE) }
   }
 
-  revalidatePath('/admin/price-book')
+  // Every book's screen, because most of these writes know the row they
+  // touched but not which catalogue it hangs from.
+  revalidatePath('/admin/price-books', 'layout')
   return idleState
 }
 
@@ -228,7 +255,9 @@ export async function setItemActive(
     return { error: describeWriteError(error, DUPLICATE_ITEM_CODE) }
   }
 
-  revalidatePath('/admin/price-book')
+  // Every book's screen, because most of these writes know the row they
+  // touched but not which catalogue it hangs from.
+  revalidatePath('/admin/price-books', 'layout')
   return idleState
 }
 
@@ -259,7 +288,9 @@ export async function deleteItem(
     return { error: describeWriteError(error, DUPLICATE_ITEM_CODE) }
   }
 
-  revalidatePath('/admin/price-book')
+  // Every book's screen, because most of these writes know the row they
+  // touched but not which catalogue it hangs from.
+  revalidatePath('/admin/price-books', 'layout')
   return idleState
 }
 
@@ -300,6 +331,8 @@ export async function moveItem(
     return { error: describeWriteError(error, INVALID_GROUP_ID) }
   }
 
-  revalidatePath('/admin/price-book')
+  // Every book's screen, because most of these writes know the row they
+  // touched but not which catalogue it hangs from.
+  revalidatePath('/admin/price-books', 'layout')
   return idleState
 }

@@ -43,7 +43,20 @@ export type PriceBookGroupRef = { id: string; name: string; itemCount: number }
 /** Which side of `is_active` a listing wants. */
 export type ActiveFilter = 'all' | 'active' | 'retired'
 
+/** A price book, as the list screen shows it. */
+export type PriceBook = {
+  id: string
+  name: string
+  description: string | null
+  position: number
+  createdAt: string
+  groupCount: number
+  itemCount: number
+}
+
 export type PriceBookFilter = {
+  /** Which book to read. Required: every screen is a view of one book. */
+  priceBookId: string
   /** Free text matched against code, name and description. */
   search?: string | null
   /** A group id, `UNGROUPED_FILTER`, or null for every group. */
@@ -57,7 +70,14 @@ export type PriceBookFilter = {
   active?: ActiveFilter
   /** 1-based. Out-of-range pages return no items rather than erroring. */
   page?: number
-  pageSize?: number
+  /**
+   * null asks for the whole catalogue on one screen, which is what the
+   * grouped view wants: a group split across two pages is a group whose
+   * concepts you cannot see together, and that was the single most
+   * confusing thing about this screen. Searching still pages, because a
+   * result set has no groups to keep whole.
+   */
+  pageSize?: number | null
 }
 
 /**
@@ -83,6 +103,13 @@ export type PriceBookListing = {
   page: number
   pageSize: number
   pageCount: number
+  /**
+   * True when the server returned fewer items than exist. PostgREST caps
+   * every response at max_rows (1000), so an unpaged read of a very large
+   * book is a slice -- and a slice that says nothing is the bug this flag
+   * exists to prevent.
+   */
+  capped: boolean
 }
 
 type GroupRow = {
@@ -168,10 +195,11 @@ function quoteFilterValue(term: string): string {
  */
 export async function listPriceBook(
   supabase: SupabaseClient,
-  filter: PriceBookFilter = {},
+  filter: PriceBookFilter,
 ): Promise<PriceBookListing> {
+  const paging = filter.pageSize !== null
   const pageSize = Math.max(1, filter.pageSize ?? DEFAULT_PAGE_SIZE)
-  const page = Math.max(1, Math.trunc(filter.page ?? 1))
+  const page = paging ? Math.max(1, Math.trunc(filter.page ?? 1)) : 1
   const from = (page - 1) * pageSize
 
   const search = filter.search?.trim() ?? ''
@@ -181,6 +209,7 @@ export async function listPriceBook(
     .select('id, group_id, code, name, description, unit, unit_cost, unit_price, is_active', {
       count: 'exact',
     })
+    .eq('price_book_id', filter.priceBookId)
 
   if (search !== '') {
     const term = quoteFilterValue(search)
@@ -218,9 +247,12 @@ export async function listPriceBook(
     supabase
       .from('price_book_groups')
       .select('id, name, position, price_book_items(count)')
+      .eq('price_book_id', filter.priceBookId)
       .order('position')
       .order('name'),
-    itemsQuery.order('code', { nullsFirst: false }).order('name').range(from, from + pageSize - 1),
+    paging
+      ? itemsQuery.order('code', { nullsFirst: false }).order('name').range(from, from + pageSize - 1)
+      : itemsQuery.order('code', { nullsFirst: false }).order('name'),
   ])
 
   if (groupsResult.error) throw groupsResult.error
@@ -295,6 +327,71 @@ export async function listPriceBook(
     itemsTotal,
     page,
     pageSize,
-    pageCount: Math.max(1, Math.ceil(itemsTotal / pageSize)),
+    pageCount: paging ? Math.max(1, Math.ceil(itemsTotal / pageSize)) : 1,
+    capped: itemsShown < itemsTotal && !paging,
+  }
+}
+
+type PriceBookRow = {
+  id: string
+  name: string
+  description: string | null
+  position: number
+  created_at: string
+  price_book_groups: { count: number }[]
+  price_book_items: { count: number }[]
+}
+
+/**
+ * Every price book, with how much each one holds.
+ *
+ * The two counts ride along as embedded aggregates in the same request: a
+ * list of books whose rows say nothing about their size is a list of names,
+ * and the first thing anyone wants to know about a catalogue is how big it
+ * is.
+ */
+export async function listPriceBooks(supabase: SupabaseClient): Promise<PriceBook[]> {
+  const { data, error } = await supabase
+    .from('price_books')
+    .select('id, name, description, position, created_at, price_book_groups(count), price_book_items(count)')
+    .order('position')
+    .order('name')
+
+  if (error) throw error
+
+  return (data as PriceBookRow[]).map((row) => ({
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    position: row.position,
+    createdAt: row.created_at,
+    groupCount: row.price_book_groups[0]?.count ?? 0,
+    itemCount: row.price_book_items[0]?.count ?? 0,
+  }))
+}
+
+/** One price book by id, or null when it does not exist (or RLS hides it). */
+export async function getPriceBook(
+  supabase: SupabaseClient,
+  id: string,
+): Promise<PriceBook | null> {
+  const { data, error } = await supabase
+    .from('price_books')
+    .select('id, name, description, position, created_at, price_book_groups(count), price_book_items(count)')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) return null
+
+  const row = data as PriceBookRow
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    position: row.position,
+    createdAt: row.created_at,
+    groupCount: row.price_book_groups[0]?.count ?? 0,
+    itemCount: row.price_book_items[0]?.count ?? 0,
   }
 }

@@ -9,17 +9,25 @@
 -- Not idempotent by design: it assumes an empty database. Re-run it with
 -- `npx supabase db reset`, not by applying this file twice.
 
-insert into public.price_book_groups (name, position) values
+-- Everything here belongs to the book 0012_price_books.sql created. Looked
+-- up by name order rather than by a literal id: the id is generated, and a
+-- seed that pinned one would break on a fresh database.
+insert into public.price_book_groups (price_book_id, name, position)
+select b.id, v.name, v.position
+from (values
   ('Movimiento de tierras', 1),
   ('Estructura',            2),
   ('Revestimiento',         3),
   ('Depuracion',            4),
   ('Iluminacion',           5),
   ('Mano de obra',          6),
-  ('Mantenimiento',         7);
+  ('Mantenimiento',         7)
+) as v(name, position)
+cross join (select id from public.price_books order by position, created_at limit 1) b;
 
-insert into public.price_book_items (group_id, code, name, description, unit, unit_cost, unit_price)
-select g.id, v.code, v.name, v.description, v.unit::unit_type, v.cost, v.price
+insert into public.price_book_items
+  (price_book_id, group_id, code, name, description, unit, unit_cost, unit_price)
+select g.price_book_id, g.id, v.code, v.name, v.description, v.unit::unit_type, v.cost, v.price
 from (values
   ('Movimiento de tierras', 'EXC-001', 'Excavacion vaso piscina',   'Excavacion con retroexcavadora y retirada de tierras', 'm2',   28.00,  48.00),
   ('Movimiento de tierras', 'EXC-002', 'Transporte de tierras',     'Portes a vertedero autorizado',                        'lot', 220.00, 380.00),

@@ -44,7 +44,7 @@ async function runImport(previous: ImportState, formData: FormData): Promise<Imp
   return previewImport(previous, formData)
 }
 
-export function ImportForm() {
+export function ImportForm({ priceBookId }: { priceBookId: string }) {
   const textareaId = useId()
   const [state, formAction, pending] = useActionState<ImportState, FormData>(
     runImport,
@@ -63,6 +63,7 @@ export function ImportForm() {
         onReset={(event) => event.preventDefault()}
         className="flex flex-col gap-2"
       >
+        <input type="hidden" name="price_book_id" value={priceBookId} />
         <input type="hidden" name="intent" value="preview" />
         <p className="max-w-3xl text-[13px] text-muted">
           La primera fila del archivo lleva los nombres de las columnas. Las columnas{' '}
@@ -155,6 +156,7 @@ export function ImportForm() {
               not what the textarea holds when Importar is pressed', edits the
               textarea after Comprobar and asserts the edit was not written.
             */}
+            <input type="hidden" name="price_book_id" value={priceBookId} />
             <input type="hidden" name="text" value={state.text} />
             <button type="submit" disabled={pending} className={PRIMARY_BUTTON_CLASS}>
               {pending ? 'Importando…' : `Importar ${state.rows.length} conceptos`}
@@ -177,7 +179,7 @@ export function ImportForm() {
             actualizados.
           </p>
           <Link
-            href="/admin/price-book"
+            href={`/admin/price-books/${priceBookId}`}
             className="w-fit text-[13px] text-accent underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             Ver el tarifario

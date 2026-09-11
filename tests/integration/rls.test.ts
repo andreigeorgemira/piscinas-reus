@@ -77,7 +77,15 @@ beforeAll(async () => {
   })
   await db.from('quotes').update({ status: 'sent' }).eq('id', quoteAId)
 
-  await db.from('price_book_groups').insert({ name: 'Albanileria' })
+  // A group belongs to a book (0012_price_books.sql). The seed leaves one
+  // behind and resetDatabase does not clear price_books, so this joins it.
+  const { data: book } = await db
+    .from('price_books')
+    .select('id')
+    .order('position')
+    .limit(1)
+    .single()
+  await db.from('price_book_groups').insert({ price_book_id: book!.id, name: 'Albanileria' })
 })
 
 afterAll(resetDatabase)

@@ -104,11 +104,29 @@ function describeWriteError(error: PostgrestError): string {
  * only step -- nothing is written here, and nothing here is trusted by
  * commitImport below.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const INVALID_BOOK = 'El tarifario no es válido.'
+
+/**
+ * Which book this import writes into. Checked rather than trusted: these are
+ * POST endpoints, and the value reaches a not-null foreign key and an
+ * upsert's conflict target.
+ */
+function readBookId(formData: FormData): string | null {
+  const raw = formData.get('price_book_id')
+  return typeof raw === 'string' && UUID_RE.test(raw) ? raw : null
+}
+
 export async function previewImport(
   _previous: ImportState,
   formData: FormData,
 ): Promise<ImportState> {
   const supabase = await requireAdmin()
+
+  const priceBookId = readBookId(formData)
+  if (priceBookId === null) {
+    return { ...idleImportState, error: INVALID_BOOK }
+  }
 
   const { text, tooLarge } = readImportText(formData)
   if (tooLarge) {
@@ -121,7 +139,11 @@ export async function previewImport(
 
   const existingCodes = new Set<string>()
   for (const chunk of chunked(codes, CODE_LOOKUP_CHUNK)) {
-    const { data, error } = await supabase.from('price_book_items').select('code').in('code', chunk)
+    const { data, error } = await supabase
+      .from('price_book_items')
+      .select('code')
+      .eq('price_book_id', priceBookId)
+      .in('code', chunk)
     if (error) {
       // The screen is only told the check failed, never why, and a chunked
       // lookup has more ways to fail than a single one -- this log is the
@@ -171,6 +193,7 @@ export async function previewImport(
  */
 async function resolveGroupIds(
   supabase: Awaited<ReturnType<typeof requireAdmin>>,
+  priceBookId: string,
   rows: ImportRow[],
 ): Promise<{ groupIdByName: Map<string, string>; groupsCreated: number } | { error: string }> {
   const groupNames = [...new Set(rows.flatMap((row) => (row.groupName === null ? [] : [row.groupName])))]
@@ -191,6 +214,7 @@ async function resolveGroupIds(
     const { data: existing, error: selectError } = await supabase
       .from('price_book_groups')
       .select('id, name')
+      .eq('price_book_id', priceBookId)
       .in('name', chunk)
 
     if (selectError) {
@@ -209,7 +233,7 @@ async function resolveGroupIds(
 
   const { data: created, error: insertError } = await supabase
     .from('price_book_groups')
-    .insert(missingNames.map((name) => ({ name })))
+    .insert(missingNames.map((name) => ({ price_book_id: priceBookId, name })))
     .select('id, name')
 
   if (insertError) {
@@ -243,6 +267,11 @@ export async function commitImport(
 ): Promise<ImportState> {
   const supabase = await requireAdmin()
 
+  const priceBookId = readBookId(formData)
+  if (priceBookId === null) {
+    return { ...idleImportState, error: INVALID_BOOK }
+  }
+
   const { text, tooLarge } = readImportText(formData)
   if (tooLarge) {
     return { ...idleImportState, text, error: TOO_LARGE_MESSAGE }
@@ -250,27 +279,35 @@ export async function commitImport(
 
   const { rows, issues, columns } = parseImport(text)
 
-  const resolved = await resolveGroupIds(supabase, rows)
+  const resolved = await resolveGroupIds(supabase, priceBookId, rows)
   if ('error' in resolved) {
     return { ...idleImportState, text, issues, error: resolved.error }
   }
   const { groupIdByName, groupsCreated } = resolved
 
   const codedRows: Record<string, unknown>[] = []
-  const codelessRows: ReturnType<typeof itemInputToRow>[] = []
+  const codelessRows: (ReturnType<typeof itemInputToRow> & { price_book_id: string })[] = []
 
   for (const row of rows) {
     const groupId = row.groupName === null ? null : groupIdByName.get(row.groupName) ?? null
     const input: ItemInput = { ...row.input, groupId }
     if (input.code === null) {
-      codelessRows.push(itemInputToRow(input))
+      codelessRows.push({ ...itemInputToRow(input), price_book_id: priceBookId })
     } else {
-      codedRows.push(codedItemPayload(input, columns.description))
+      codedRows.push({
+        ...codedItemPayload(input, columns.description),
+        price_book_id: priceBookId,
+      })
     }
   }
 
   if (codedRows.length > 0) {
-    const { error } = await supabase.from('price_book_items').upsert(codedRows, { onConflict: 'code' })
+    // The conflict target is the unique constraint as it now stands: a code
+    // is unique WITHIN a book (0012_price_books.sql), so 'code' alone no
+    // longer names an index and the upsert would be refused.
+    const { error } = await supabase
+      .from('price_book_items')
+      .upsert(codedRows, { onConflict: 'price_book_id,code' })
     if (error) {
       return { ...idleImportState, text, issues, error: describeWriteError(error) }
     }
@@ -283,12 +320,12 @@ export async function commitImport(
       // committed -- these two writes are not one transaction. Revalidating
       // before returning the failure stops /admin/price-book from serving a
       // cached page missing rows this import really did write.
-      revalidatePath('/admin/price-book')
+      revalidatePath(`/admin/price-books/${priceBookId}`)
       return { ...idleImportState, text, issues, error: describeWriteError(error) }
     }
   }
 
-  revalidatePath('/admin/price-book')
+  revalidatePath(`/admin/price-books/${priceBookId}`)
 
   return {
     stage: 'done',

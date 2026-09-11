@@ -74,9 +74,17 @@ describe('leads: the one anonymous write in the system', () => {
 
 describe('service_role', () => {
   it('can write price_book_groups', async () => {
-    const { data, error } = await adminDb()
+    const admin = adminDb()
+    const { data: book } = await admin
+      .from('price_books')
+      .select('id')
+      .order('position')
+      .limit(1)
+      .single()
+
+    const { data, error } = await admin
       .from('price_book_groups')
-      .insert({ name: uniqueEmail('group') })
+      .insert({ price_book_id: book!.id, name: uniqueEmail('group') })
       .select()
       .single()
     expect(error).toBeNull()
