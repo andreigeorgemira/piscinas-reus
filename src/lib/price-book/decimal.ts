@@ -100,3 +100,16 @@ export function formatMoney(value: number): string {
 
   return `${sign}${grouped},${fraction}`
 }
+
+/**
+ * The same amount with its unit attached: '1.234,50 €'.
+ *
+ * A non-breaking space before the symbol, as Spanish typography wants, and
+ * so a column of prices never wraps between the number and the euro sign.
+ * Screens use this; form fields use formatMoney, because parseDecimal
+ * tolerates a trailing euro but a field that shows one invites typing one in
+ * the middle.
+ */
+export function formatEuros(value: number): string {
+  return `${formatMoney(value)}\u00a0€`
+}

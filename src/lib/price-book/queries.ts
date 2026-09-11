@@ -5,7 +5,7 @@ import type { UnitType } from './schema'
 export const UNGROUPED_NAME = 'Sin grupo'
 
 /** How many concepts one screen of the price book holds. */
-export const DEFAULT_PAGE_SIZE = 50
+export const DEFAULT_PAGE_SIZE = 25
 
 /** The value the group filter uses for "items filed under no group at all". */
 export const UNGROUPED_FILTER = 'ungrouped'
@@ -32,11 +32,21 @@ export type PriceBookGroup = {
 /** A group as the filter chips and the row selects need it. */
 export type PriceBookGroupRef = { id: string; name: string }
 
+/** Which side of `is_active` a listing wants. */
+export type ActiveFilter = 'all' | 'active' | 'retired'
+
 export type PriceBookFilter = {
   /** Free text matched against code, name and description. */
   search?: string | null
   /** A group id, `UNGROUPED_FILTER`, or null for every group. */
   groupId?: string | null
+  /** One unit of measure, or null for all of them. */
+  unit?: UnitType | null
+  /** Inclusive bounds on unit_cost, in euros. Either may stand alone. */
+  costMin?: number | null
+  costMax?: number | null
+  /** Defaults to 'all': this is the screen that brings a retired item back. */
+  active?: ActiveFilter
   /** 1-based. Out-of-range pages return no items rather than erroring. */
   page?: number
   pageSize?: number
@@ -169,6 +179,25 @@ export async function listPriceBook(
     itemsQuery = itemsQuery.is('group_id', null)
   } else if (filter.groupId) {
     itemsQuery = itemsQuery.eq('group_id', filter.groupId)
+  }
+
+  if (filter.unit) {
+    itemsQuery = itemsQuery.eq('unit', filter.unit)
+  }
+
+  // Bounds are applied independently: "everything over 100 euros" is as
+  // useful a question as "between 20 and 50", and needs no upper bound.
+  if (typeof filter.costMin === 'number' && Number.isFinite(filter.costMin)) {
+    itemsQuery = itemsQuery.gte('unit_cost', filter.costMin)
+  }
+  if (typeof filter.costMax === 'number' && Number.isFinite(filter.costMax)) {
+    itemsQuery = itemsQuery.lte('unit_cost', filter.costMax)
+  }
+
+  if (filter.active === 'active') {
+    itemsQuery = itemsQuery.eq('is_active', true)
+  } else if (filter.active === 'retired') {
+    itemsQuery = itemsQuery.eq('is_active', false)
   }
 
   const [groupsResult, itemsResult] = await Promise.all([

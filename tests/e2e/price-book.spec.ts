@@ -25,11 +25,34 @@ test.beforeAll(async () => {
   // file until someone runs `npx supabase db reset`. That reset is exactly
   // the prerequisite this file was changed to stop needing, so the cleanup
   // has to be unconditional rather than best-effort.
-  const { error: sweepError } = await admin
+  // Sweeps everything this file has ever created, not only the 1001-row
+  // fixture: the screen shows 25 concepts per page, so rows left behind by an
+  // earlier run push the row a test just created onto page two, where the
+  // test cannot see it. Every fixture name below is unique to this file --
+  // no seeded concept is called 'Concepto ...' and no seeded group 'Grupo
+  // ...' -- so this cannot touch the catalogue the other tests read.
+  //
+  // Items first: deleting a group only nulls its items' group_id (on delete
+  // set null), so sweeping groups first would leave the items behind in the
+  // ungrouped bucket, still taking up the page.
+  const { error: itemSweepError } = await admin
     .from('price_book_items')
     .delete()
-    .like('name', 'Relleno %')
-  if (sweepError) throw sweepError
+    .or(
+      [
+        'name.like.Relleno %',
+        'name.like.Concepto %',
+        'name.like.Codeless %',
+        'name.like.Nombre actualizado %',
+      ].join(','),
+    )
+  if (itemSweepError) throw itemSweepError
+
+  const { error: groupSweepError } = await admin
+    .from('price_book_groups')
+    .delete()
+    .like('name', 'Grupo %')
+  if (groupSweepError) throw groupSweepError
 
   const staff = await admin.auth.admin.createUser({
     email: staffEmail,
@@ -100,7 +123,7 @@ test('creates a group, adds a concept and edits its price inline', async ({ page
   // closing it again leaves exactly one set of Código/Concepto/Coste/Precio
   // fields in this region, which is what lets the edit row below be found
   // by accessible name alone instead of by DOM position.
-  await region.getByRole('button', { name: `Añadir concepto a ${groupName}` }).click()
+  await region.getByRole('button', { name: 'Cancelar' }).click()
 
   await region.getByRole('button', { name: `Editar ${itemName}` }).click()
   // A dot, not a comma: both spellings must save as the same two-decimal
@@ -109,7 +132,8 @@ test('creates a group, adds a concept and edits its price inline', async ({ page
   await region.getByRole('button', { name: 'Guardar' }).click()
 
   await expect(region.getByRole('button', { name: `Editar ${itemName}` })).toBeVisible()
-  await expect(region.getByRole('cell', { name: '22,50', exact: true })).toBeVisible()
+  // The price column carries its unit now, so the cell reads '22,50 €'.
+  await expect(region.getByRole('cell', { name: /^22,50/ })).toBeVisible()
 })
 
 test('reports a duplicate code in Spanish instead of crashing', async ({ page }) => {
@@ -287,8 +311,14 @@ test('imports a CSV that creates its own group and price', async ({ page }) => {
   await page.getByRole('link', { name: 'Ver el tarifario' }).click()
   await expect(page).toHaveURL(/\/admin\/price-book$/)
 
+  // Searched rather than read off the first page: the catalogue holds more
+  // than one page of concepts by the time this test runs, and where the
+  // imported row landed is not what this test is about.
+  await page.getByRole('searchbox', { name: 'Buscar en el tarifario' }).fill(itemName)
+  await page.getByRole('searchbox', { name: 'Buscar en el tarifario' }).press('Enter')
+
   const region = page.getByRole('rowgroup', { name: groupName })
-  await expect(region.getByRole('cell', { name: '18,00', exact: true })).toBeVisible()
+  await expect(region.getByRole('cell', { name: /^18,00/ })).toBeVisible()
 })
 
 test('reports a bad price by line number and hides the import button', async ({ page }) => {
@@ -479,8 +509,8 @@ test('pages through a catalogue too big for one screen', async ({ page }) => {
     await loginAsStaff(page)
     await page.goto('/admin/price-book')
 
-    const pager = page.getByRole('navigation', { name: 'Páginas del tarifario' })
-    await expect(pager.getByText(/Mostrando 50 de \d+ conceptos/)).toBeVisible()
+    const pager = page.getByRole('navigation', { name: 'Páginas de conceptos' })
+    await expect(pager.getByText(/Mostrando 25 de \d+ conceptos/)).toBeVisible()
     await expect(pager.getByText('1 /')).toBeVisible()
 
     const firstCode = `FILL-${runId}-0000`
@@ -492,7 +522,7 @@ test('pages through a catalogue too big for one screen', async ({ page }) => {
     // page one stopped, and the row that opened page one is gone from it.
     await expect(pager.getByText('2 /')).toBeVisible()
     await expect(page.getByRole('cell', { name: firstCode, exact: true })).toHaveCount(0)
-    await expect(page.getByRole('cell', { name: `FILL-${runId}-0050`, exact: true })).toBeVisible()
+    await expect(page.getByRole('cell', { name: `FILL-${runId}-0025`, exact: true })).toBeVisible()
   } finally {
     const { error: cleanupError } = await admin
       .from('price_book_items')
@@ -520,7 +550,10 @@ test('finds a concept by code and keeps the search in the address', async ({ pag
   await region.getByLabel('Coste', { exact: true }).fill('7,00')
   await region.getByLabel('Precio', { exact: true }).fill('14,00')
   await region.getByRole('button', { name: 'Añadir', exact: true }).click()
-  await expect(region.getByRole('button', { name: `Editar ${itemName}` })).toBeVisible()
+  // Waits on the toast, not on the new row: by the time this test runs the
+  // catalogue has grown past one page, so the row it just created may be on
+  // page two -- which is exactly what the search below is for.
+  await expect(page.getByText('Concepto añadido')).toBeVisible()
 
   await page.getByRole('searchbox', { name: 'Buscar en el tarifario' }).fill(code)
   await page.getByRole('searchbox', { name: 'Buscar en el tarifario' }).press('Enter')

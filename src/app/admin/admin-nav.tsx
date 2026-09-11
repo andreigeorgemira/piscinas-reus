@@ -3,45 +3,32 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { Tooltip } from '@/components/ui/tooltip'
 
-type NavItem = {
-  href: string
-  label: string
-  icon: ReactNode
-}
+type NavItem = { href: string; label: string; icon: ReactNode }
 
 /**
- * Only routes that exist are listed. The design shows Clientes, Presupuestos
- * and Proyectos too, and they belong here the moment phase 3 lands, but a
- * sidebar that offers a dead link teaches staff to distrust the whole thing.
+ * No sections. Two entries do not need headings over them, and the app is
+ * meant to stay small enough that they never will: the moment Clientes,
+ * Presupuestos and Proyectos land they join this flat list. Only routes that
+ * exist are here -- a sidebar that offers a dead link teaches staff to
+ * distrust the whole thing.
  */
-const ITEMS: { section: string; items: NavItem[] }[] = [
+const ITEMS: NavItem[] = [
   {
-    section: 'Trabajo',
-    items: [
-      {
-        href: '/admin',
-        label: 'Panel',
-        icon: (
-          <path d="M2.5 6.8 8 2.5l5.5 4.3v6.2a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8Z" />
-        ),
-      },
-    ],
+    href: '/admin',
+    label: 'Panel',
+    icon: <path d="M2.5 6.8 8 2.5l5.5 4.3v6.2a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8Z" />,
   },
   {
-    section: 'Catálogo',
-    items: [
-      {
-        href: '/admin/price-book',
-        label: 'Tarifario',
-        icon: (
-          <>
-            <path d="M8.4 1.9H3.1a1.2 1.2 0 0 0-1.2 1.2v5.3c0 .3.1.6.4.8l5.6 5.6a1.2 1.2 0 0 0 1.7 0l4.5-4.5a1.2 1.2 0 0 0 0-1.7L8.5 3a1.2 1.2 0 0 0-.1-1.1Z" />
-            <circle cx="5.2" cy="5.2" r="1" />
-          </>
-        ),
-      },
-    ],
+    href: '/admin/price-book',
+    label: 'Tarifario',
+    icon: (
+      <>
+        <path d="M8.4 1.9H3.1a1.2 1.2 0 0 0-1.2 1.2v5.3c0 .3.1.6.4.8l5.6 5.6a1.2 1.2 0 0 0 1.7 0l4.5-4.5a1.2 1.2 0 0 0 0-1.7L8.5 3a1.2 1.2 0 0 0-.1-1.1Z" />
+        <circle cx="5.2" cy="5.2" r="1" />
+      </>
+    ),
   },
 ]
 
@@ -56,48 +43,54 @@ function isCurrent(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-export function AdminNav() {
+export function AdminNav({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname()
 
   return (
-    <nav className="flex flex-col gap-0.5 overflow-y-auto px-3 pt-4">
-      {ITEMS.map((group) => (
-        <div key={group.section} className="flex flex-col gap-px pb-4">
-          <span className="px-2.5 pb-2 text-2xs font-medium tracking-[0.08em] text-shell-faint uppercase">
-            {group.section}
-          </span>
-          {group.items.map((item) => {
-            const current = isCurrent(pathname, item.href)
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={current ? 'page' : undefined}
-                className={`flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                  current
-                    ? 'bg-shell-active font-medium text-shell-ink'
-                    : 'text-shell-muted hover:bg-shell-active/60 hover:text-shell-ink'
-                }`}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke={current ? 'var(--accent)' : 'currentColor'}
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  {item.icon}
-                </svg>
-                {item.label}
-              </Link>
-            )
-          })}
-        </div>
-      ))}
+    <nav className="flex flex-col gap-0.5 overflow-y-auto px-2 py-2">
+      {ITEMS.map((item) => {
+        const current = isCurrent(pathname, item.href)
+        const link = (
+          <Link
+            href={item.href}
+            aria-current={current ? 'page' : undefined}
+            className={`flex h-9 items-center gap-2.5 rounded-md text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+              collapsed ? 'justify-center px-0' : 'px-2.5'
+            } ${
+              current
+                ? 'bg-shell-active font-medium text-shell-ink'
+                : 'text-shell-muted hover:bg-shell-active/60 hover:text-shell-ink'
+            }`}
+          >
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke={current ? 'var(--accent)' : 'currentColor'}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="shrink-0"
+              aria-hidden="true"
+            >
+              {item.icon}
+            </svg>
+            {collapsed ? <span className="sr-only">{item.label}</span> : item.label}
+          </Link>
+        )
+
+        // Collapsed, the label is the tooltip's whole job: there is nothing
+        // on screen but an icon. Expanded, a tooltip repeating the visible
+        // word would be noise.
+        return collapsed ? (
+          <Tooltip key={item.href} label={item.label} side="right">
+            {link}
+          </Tooltip>
+        ) : (
+          <div key={item.href}>{link}</div>
+        )
+      })}
     </nav>
   )
 }

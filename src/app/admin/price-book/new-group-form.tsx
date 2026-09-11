@@ -1,22 +1,21 @@
 'use client'
 
 import { startTransition, useActionState, useId, useState } from 'react'
+import { toast } from 'sonner'
 import { idleState, type ActionState } from './action-state'
 import { createGroup } from './actions'
 import { PRIMARY_BUTTON_CLASS } from './ui'
 
 const INLINE_FIELD_CLASS =
-  'h-6 rounded border border-line bg-surface px-1.5 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent'
+  'h-7 rounded-md border border-line bg-surface px-2 text-sm text-ink placeholder:text-faint focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent'
 
 /**
- * Creating a group lives in the toolbar, so it is drawn as one control
- * cluster inside a single border rather than as two labelled fields and a
- * button floating beside the filters.
+ * Creating a group, at the FOOT of the catalogue.
  *
- * The name keeps a visible label. Position does not: it is a number a staff
- * member changes once in a while, the field is pre-filled with the right
- * answer, and spelling it out in the strip would cost more room than it is
- * worth -- so it carries an accessible name and a tooltip instead.
+ * It used to sit above the table, which put a form between a person and the
+ * thing they came to read. Everything that adds to this screen is now at the
+ * end of what it adds to: a concept at the end of its group, a group at the
+ * end of the list of groups.
  */
 export function NewGroupForm({ nextPosition }: { nextPosition: number }) {
   const nameId = useId()
@@ -33,6 +32,7 @@ export function NewGroupForm({ nextPosition }: { nextPosition: number }) {
       // node_modules/next/dist/docs/01-app/02-guides/interactive-apps.md.
       if (next.error === null) {
         startTransition(() => setFieldsKey((key) => key + 1))
+        toast.success('Grupo creado')
       }
       return next
     },
@@ -40,7 +40,7 @@ export function NewGroupForm({ nextPosition }: { nextPosition: number }) {
   )
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col gap-1 border-t border-line px-3 py-2">
       <form
         action={formAction}
         // React clears an uncontrolled form once a function action settles, which
@@ -48,9 +48,22 @@ export function NewGroupForm({ nextPosition }: { nextPosition: number }) {
         // reset event is cancelable, so the fields clear on success only, through
         // the key below.
         onReset={(event) => event.preventDefault()}
-        className="flex items-center gap-1.5 rounded-lg border border-line bg-surface p-1 pl-2.5"
+        className="flex flex-wrap items-center gap-2"
       >
-        <label htmlFor={nameId} className="text-2xs whitespace-nowrap text-muted">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          className="shrink-0 text-faint"
+          aria-hidden="true"
+        >
+          <path d="M8 3.4v9.2M3.4 8h9.2" />
+        </svg>
+        <label htmlFor={nameId} className="text-xs whitespace-nowrap text-muted">
           Nuevo grupo
         </label>
         <input
@@ -58,8 +71,8 @@ export function NewGroupForm({ nextPosition }: { nextPosition: number }) {
           id={nameId}
           name="name"
           maxLength={80}
-          placeholder="Revestimiento"
-          className={`${INLINE_FIELD_CLASS} w-40 placeholder:text-faint`}
+          placeholder="Climatizacion"
+          className={`${INLINE_FIELD_CLASS} w-48`}
         />
 
         <label htmlFor={positionId} className="sr-only">
@@ -75,7 +88,7 @@ export function NewGroupForm({ nextPosition }: { nextPosition: number }) {
           min={0}
           max={9999}
           step={1}
-          className={`${INLINE_FIELD_CLASS} num w-12 text-right`}
+          className={`${INLINE_FIELD_CLASS} num w-14 text-right`}
         />
 
         <button type="submit" disabled={pending} className={PRIMARY_BUTTON_CLASS}>

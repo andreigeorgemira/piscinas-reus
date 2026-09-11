@@ -1,61 +1,36 @@
+import type { TableColumn } from '@/components/ui/table'
 import { formatMoney } from '@/lib/price-book/decimal'
-import { UNGROUPED_NAME, type PriceBookItem } from '@/lib/price-book/queries'
+import type { PriceBookItem } from '@/lib/price-book/queries'
 import { UNIT_LABELS, UNIT_TYPES } from '@/lib/price-book/schema'
 import { FIELD_CLASS } from './ui'
 
 /** A group an item can be filed under. The "Sin grupo" bucket is not one. */
 export type GroupOption = { id: string; name: string }
 
-type Column = { label: string; numeric?: boolean; width: string }
-
 /**
- * The columns this component fills, in order. Exported so the table header,
- * the column widths and the fields below them can never drift apart, and so
- * a row that needs to span the whole table (an error message) knows how wide
- * the table is. The `+ 1` is the actions column, which each row builds for
- * itself.
+ * The catalogue's columns, in order.
  *
- * There is no Grupo column. Every row here is already inside the rowgroup
- * for its group, so the column repeated the heading once per row and bought
- * nothing; the control that moves an item to another group now lives in the
- * edit row's Concepto cell, where it is only rendered when it can be used.
+ * There is no Grupo column: every row is already inside the rowgroup for its
+ * group, so it repeated the heading once per row. Moving an item is the
+ * handle in the first column instead - drag it, or open it and pick.
  */
-export const ITEM_COLUMNS: Column[] = [
-  { label: 'Código', width: 'w-32' },
-  { label: 'Concepto', width: 'w-auto' },
-  { label: 'Unidad', width: 'w-24' },
-  { label: 'Coste', numeric: true, width: 'w-28' },
-  { label: 'Precio', numeric: true, width: 'w-28' },
-  { label: 'Activo', width: 'w-24' },
+export const PRICE_BOOK_COLUMNS: TableColumn[] = [
+  { key: 'handle', label: 'Mover', width: 'w-9', srOnly: true },
+  { key: 'code', label: 'Código', width: 'w-32' },
+  { key: 'name', label: 'Concepto' },
+  { key: 'unit', label: 'Unidad', width: 'w-24' },
+  { key: 'cost', label: 'Coste', width: 'w-32', align: 'right' },
+  { key: 'price', label: 'Precio', width: 'w-32', align: 'right' },
+  { key: 'active', label: 'Activo', width: 'w-20' },
+  { key: 'actions', label: 'Acciones', width: 'w-24', srOnly: true },
 ]
 
-const ACTIONS_COLUMN_WIDTH = 'w-28'
+export const ITEM_TABLE_COLUMN_COUNT = PRICE_BOOK_COLUMNS.length
 
-export const ITEM_TABLE_COLUMN_COUNT = ITEM_COLUMNS.length + 1
-
-export const CELL_CLASS = 'border-b border-line-soft px-3 py-1.5 align-middle'
+export const CELL_CLASS = 'border-b border-line-soft px-3 py-2 align-middle'
 
 /**
- * Fixes the column widths for the whole catalogue.
- *
- * The screen is one table with a rowgroup per group, rather than a table per
- * group: a repeated column header every four rows was the single noisiest
- * thing on it. `table-fixed` plus these widths is what lets the long concept
- * names truncate instead of shoving the price columns around.
- */
-export function ItemColumns() {
-  return (
-    <colgroup>
-      {ITEM_COLUMNS.map((column) => (
-        <col key={column.label} className={column.width} />
-      ))}
-      <col className={ACTIONS_COLUMN_WIDTH} />
-    </colgroup>
-  )
-}
-
-/**
- * The editable cells shared by the edit row and the new-item row.
+ * The editable cells, shared by the edit row and the new-item row.
  *
  * Every control carries `form={formId}` instead of sitting inside the form.
  * A <form> is not valid between <tr> and <td>: the HTML parser hoists it out
@@ -70,19 +45,15 @@ export function ItemColumns() {
  */
 export function ItemFields({
   formId,
-  groups,
   item,
-  defaultGroupId,
 }: {
   formId: string
-  groups: GroupOption[]
   /** The row being edited, or undefined for the new-item row. */
   item?: PriceBookItem
-  /** Which group the row starts out in. */
-  defaultGroupId: string | null
 }) {
   return (
     <>
+      <td className={CELL_CLASS} />
       <td className={CELL_CLASS}>
         <input
           form={formId}
@@ -99,7 +70,7 @@ export function ItemFields({
         />
       </td>
       <td className={CELL_CLASS}>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1">
           <input
             form={formId}
             name="name"
@@ -116,28 +87,8 @@ export function ItemFields({
             defaultValue={item?.description ?? ''}
             maxLength={2000}
             placeholder="Descripción (opcional)"
-            className={`${FIELD_CLASS} w-full`}
+            className={`${FIELD_CLASS} w-full text-xs`}
           />
-          {/*
-            The only place an item changes group. It sits under the concept
-            rather than in a column of its own because moving an item between
-            groups is a rare edit, and a column for it cost every row of the
-            table a repeat of its own group heading.
-          */}
-          <select
-            form={formId}
-            name="group_id"
-            aria-label="Grupo"
-            defaultValue={defaultGroupId ?? ''}
-            className={`${FIELD_CLASS} w-full`}
-          >
-            <option value="">{UNGROUPED_NAME}</option>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
         </div>
       </td>
       <td className={CELL_CLASS}>

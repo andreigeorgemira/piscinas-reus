@@ -262,3 +262,44 @@ export async function deleteItem(
   revalidatePath('/admin/price-book')
   return idleState
 }
+
+/**
+ * Files an item under a different group, or under none.
+ *
+ * Its own action rather than a corner of updateItem: moving is one column,
+ * it is what a drag across the table does, and routing it through the full
+ * item form would mean the drop had to carry -- and could therefore
+ * clobber -- the name, the unit and both prices.
+ *
+ * An empty `group_id` means the ungrouped bucket, which is a real state
+ * (`price_book_items.group_id` is nullable), not a missing value.
+ */
+export async function moveItem(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await requireAdmin()
+
+  const id = readId(formData, 'id')
+  if (id === null) {
+    return { error: INVALID_ITEM_ID }
+  }
+
+  const rawGroup = formData.get('group_id')
+  const groupId = typeof rawGroup === 'string' && rawGroup !== '' ? rawGroup : null
+  if (groupId !== null && !UUID_RE.test(groupId)) {
+    return { error: INVALID_GROUP_ID }
+  }
+
+  const { error } = await supabase
+    .from('price_book_items')
+    .update({ group_id: groupId })
+    .eq('id', id)
+
+  if (error) {
+    return { error: describeWriteError(error, INVALID_GROUP_ID) }
+  }
+
+  revalidatePath('/admin/price-book')
+  return idleState
+}

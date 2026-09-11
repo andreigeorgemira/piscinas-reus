@@ -215,3 +215,32 @@ body {
   font-feature-settings: "zero" 1;
   letter-spacing: -0.01em;
 }
+
+/*
+ * Toast colours, fed from the same tokens as everything else so they follow
+ * the theme instead of carrying their own palette. sonner reads these
+ * variables when the Toaster is rendered with `richColors`.
+ */
+[data-sonner-toaster] {
+  --normal-bg: var(--surface);
+  --normal-text: var(--ink);
+  --normal-border: var(--line);
+
+  --success-bg: var(--success-soft);
+  --success-text: var(--success);
+  --success-border: color-mix(in oklab, var(--success) 35%, transparent);
+
+  --error-bg: var(--danger-soft);
+  --error-text: var(--danger);
+  --error-border: color-mix(in oklab, var(--danger) 35%, transparent);
+
+  --warning-bg: var(--warn-soft);
+  --warning-text: var(--warn);
+  --warning-border: color-mix(in oklab, var(--warn) 35%, transparent);
+
+  --info-bg: var(--accent-soft);
+  --info-text: var(--accent);
+  --info-border: color-mix(in oklab, var(--accent) 35%, transparent);
+
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}

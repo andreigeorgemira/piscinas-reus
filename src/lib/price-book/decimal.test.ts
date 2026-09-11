@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatMoney, hasMoreThanTwoDecimals, parseDecimal } from './decimal'
+import { formatEuros, formatMoney, hasMoreThanTwoDecimals, parseDecimal } from './decimal'
 
 describe('parseDecimal', () => {
   it('parses a comma as the decimal separator', () => {
@@ -126,5 +126,16 @@ describe('formatMoney', () => {
 
   it('round-trips through parseDecimal', () => {
     expect(parseDecimal(formatMoney(1234567.89))).toBe(1234567.89)
+  })
+})
+
+describe('formatEuros', () => {
+  it('appends the symbol after a non-breaking space', () => {
+    expect(formatEuros(1234.5)).toBe('1.234,50\u00a0€')
+  })
+
+  it('is still readable by parseDecimal', () => {
+    // The form strips a trailing euro sign, so a pasted price survives.
+    expect(parseDecimal(formatEuros(1234.5))).toBe(1234.5)
   })
 })
