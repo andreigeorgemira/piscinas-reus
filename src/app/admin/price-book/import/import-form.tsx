@@ -5,16 +5,14 @@ import { useActionState, useId } from 'react'
 import { formatMoney } from '@/lib/price-book/decimal'
 import { UNGROUPED_NAME } from '@/lib/price-book/queries'
 import { UNIT_LABELS } from '@/lib/price-book/schema'
+import { PRIMARY_BUTTON_CLASS } from '../ui'
 import { commitImport, previewImport } from './actions'
 import { idleImportState, type ImportState } from './import-state'
 
-const FIELD_CLASS =
-  'rounded border border-slate-400 bg-transparent px-2 py-1.5 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-700 dark:border-slate-600 dark:focus-visible:outline-blue-400'
+const TEXTAREA_CLASS =
+  'rounded-[5px] border border-line bg-surface px-2 py-1.5 text-[13px] text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent'
 
-const PRIMARY_BUTTON_CLASS =
-  'w-fit rounded border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-60 dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300 dark:focus-visible:outline-blue-400'
-
-const CELL_CLASS = 'border-b border-slate-200 px-2 py-1 align-top dark:border-slate-800'
+const CELL_CLASS = 'border-b border-line-soft px-2.5 py-1 align-top'
 
 const ACTION_LABELS = {
   create: 'Añade',
@@ -66,7 +64,7 @@ export function ImportForm() {
         className="flex flex-col gap-2"
       >
         <input type="hidden" name="intent" value="preview" />
-        <p className="max-w-3xl text-sm text-slate-600 dark:text-slate-400">
+        <p className="max-w-3xl text-[13px] text-muted">
           La primera fila del archivo lleva los nombres de las columnas. Las columnas{' '}
           <strong>concepto</strong>, <strong>unidad</strong>, <strong>coste</strong> y{' '}
           <strong>precio</strong> son obligatorias; <strong>grupo</strong>,{' '}
@@ -85,7 +83,7 @@ export function ImportForm() {
           rows={10}
           defaultValue={state.text}
           placeholder={PLACEHOLDER}
-          className={`${FIELD_CLASS} font-mono`}
+          className={`${TEXTAREA_CLASS} font-mono`}
         />
         <button type="submit" disabled={pending} className={PRIMARY_BUTTON_CLASS}>
           {pending ? 'Comprobando…' : 'Comprobar'}
@@ -93,13 +91,13 @@ export function ImportForm() {
       </form>
 
       {state.error ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+        <p role="alert" className="text-[13px] text-danger">
           {state.error}
         </p>
       ) : null}
 
       {state.issues.length > 0 ? (
-        <ul role="alert" className="list-inside list-disc text-sm text-red-700 dark:text-red-400">
+        <ul role="alert" className="list-inside list-disc text-[13px] text-danger">
           {state.issues.map((issue, index) => (
             <li key={index}>
               Línea {issue.line}: {issue.message}
@@ -110,7 +108,7 @@ export function ImportForm() {
 
       {showPreview ? (
         <div className="flex flex-col gap-2">
-          <table className="w-full border-collapse text-sm">
+          <table className="w-full border-collapse overflow-hidden rounded-[7px] border border-line bg-surface text-[13px]">
             <caption className="sr-only">Previsualización de la importación</caption>
             <thead>
               <tr>
@@ -118,7 +116,7 @@ export function ImportForm() {
                   <th
                     key={label}
                     scope="col"
-                    className="border-b border-slate-400 px-2 py-1.5 text-left font-medium dark:border-slate-600"
+                    className="border-b border-line px-2.5 pt-2 pb-1.5 text-left text-[10.5px] font-medium tracking-[0.05em] text-muted uppercase"
                   >
                     {label}
                   </th>
@@ -134,10 +132,10 @@ export function ImportForm() {
                   <td className={`${CELL_CLASS} font-mono`}>{row.code ?? '—'}</td>
                   <td className={CELL_CLASS}>{row.name}</td>
                   <td className={CELL_CLASS}>{UNIT_LABELS[row.unit]}</td>
-                  <td className={`${CELL_CLASS} text-right tabular-nums`}>
+                  <td className={`${CELL_CLASS} num text-right`}>
                     {formatMoney(row.unitCost)}
                   </td>
-                  <td className={`${CELL_CLASS} text-right tabular-nums`}>
+                  <td className={`${CELL_CLASS} num text-right`}>
                     {formatMoney(row.unitPrice)}
                   </td>
                 </tr>
@@ -166,21 +164,21 @@ export function ImportForm() {
       ) : null}
 
       {state.stage === 'done' ? (
-        <div className="flex flex-col gap-2 rounded border border-slate-400 p-4 dark:border-slate-600">
+        <div className="flex w-fit flex-col gap-2 rounded-[7px] border border-line bg-surface p-4">
           {/*
             "updated" only counts rows that carried a code -- an upsert never
             says which half of those were new and which replaced an existing
             row, so this is worded as "created or updated", never as a
             precise update count.
           */}
-          <p className="text-sm">
+          <p className="text-[13px]">
             Importación completada: {state.groupsCreated} grupos nuevos, {state.created}{' '}
             conceptos nuevos sin código, {state.updated} conceptos con código creados o
             actualizados.
           </p>
           <Link
             href="/admin/price-book"
-            className="w-fit text-sm underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 dark:focus-visible:outline-blue-400"
+            className="w-fit text-[13px] text-accent underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             Ver el tarifario
           </Link>

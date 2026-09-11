@@ -13,14 +13,7 @@ import {
   type GroupOption,
 } from './item-fields'
 import { ItemRow } from './item-row'
-
-const BUTTON_CLASS =
-  'rounded border border-slate-400 px-2 py-1 text-xs whitespace-nowrap hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-700 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800 dark:focus-visible:outline-blue-400'
-
-const PRIMARY_BUTTON_CLASS = `${BUTTON_CLASS} bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300`
-
-const FIELD_CLASS =
-  'rounded border border-slate-400 bg-transparent px-1.5 py-1 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-700 dark:border-slate-600 dark:focus-visible:outline-blue-400'
+import { BUTTON_CLASS, FIELD_CLASS, PRIMARY_BUTTON_CLASS } from './ui'
 
 /**
  * Deleting a group never deletes a price: price_book_items.group_id is
@@ -130,67 +123,87 @@ export function GroupSection({
   const groupError = renameError ?? deleteState.error
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 id={headingId} className="text-lg font-semibold">
+    <section
+      aria-labelledby={headingId}
+      className="overflow-hidden rounded-[7px] border border-line bg-surface"
+    >
+      <div className="group/header flex flex-wrap items-center gap-2 border-b border-line bg-surface-sunk px-3 py-1.5">
+        <h2
+          id={headingId}
+          className="text-[11px] font-semibold tracking-[0.06em] text-ink-soft uppercase"
+        >
           {group.name}
         </h2>
-        <button
-          type="button"
-          aria-label={`Añadir concepto a ${group.name}`}
-          aria-expanded={adding}
-          onClick={() => setAdding(!adding)}
-          className={BUTTON_CLASS}
-        >
-          + Concepto
-        </button>
-        {groupId === null ? null : (
-          <>
-            <button
-              ref={renameButton}
-              type="button"
-              aria-label={`Renombrar ${group.name}`}
-              aria-expanded={renaming}
-              onClick={() => setRenaming(!renaming)}
-              className={BUTTON_CLASS}
-            >
-              Renombrar
-            </button>
-            <form action={deleteAction}>
-              <input type="hidden" name="id" value={groupId} />
-              <ConfirmButton question={deleteQuestion(group.name, group.items.length)}>
-                Borrar grupo
-              </ConfirmButton>
-            </form>
-          </>
-        )}
+        <span className="num text-[11px] text-faint">{group.items.length}</span>
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            aria-label={`Añadir concepto a ${group.name}`}
+            aria-expanded={adding}
+            onClick={() => setAdding(!adding)}
+            className={BUTTON_CLASS}
+          >
+            + Concepto
+          </button>
+          {groupId === null ? null : (
+            // Renaming and deleting a group are rare and one of them is
+            // destructive, so they wait for the pointer or the keyboard to
+            // reach this header. Adding a concept is the reason staff open
+            // this screen, so it never hides. Opacity rather than `hidden`:
+            // both stay in the tab order and focus-within brings them back.
+            <div className="flex items-center gap-1.5 opacity-0 transition-opacity group-hover/header:opacity-100 focus-within:opacity-100">
+              <button
+                ref={renameButton}
+                type="button"
+                aria-label={`Renombrar ${group.name}`}
+                aria-expanded={renaming}
+                onClick={() => setRenaming(!renaming)}
+                className={BUTTON_CLASS}
+              >
+                Renombrar
+              </button>
+              <form action={deleteAction}>
+                <input type="hidden" name="id" value={groupId} />
+                <ConfirmButton question={deleteQuestion(group.name, group.items.length)}>
+                  Borrar grupo
+                </ConfirmButton>
+              </form>
+            </div>
+          )}
+        </div>
       </div>
 
       {renaming && groupId !== null ? (
         <form
           action={renameAction}
           onReset={(event) => event.preventDefault()}
-          className="flex flex-wrap items-end gap-2"
+          className="flex flex-wrap items-end gap-2 border-b border-line bg-canvas px-3 py-2"
         >
           <input type="hidden" name="id" value={groupId} />
-          <input
-            name="name"
-            aria-label="Nombre"
-            defaultValue={group.name}
-            maxLength={80}
-            autoFocus
-            className={FIELD_CLASS}
-          />
-          <input
-            name="position"
-            type="number"
-            aria-label="Posición"
-            defaultValue={group.position}
-            min={0}
-            max={9999}
-            step={1}
-            className={`${FIELD_CLASS} w-24`}
-          />
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] text-muted">Nombre</span>
+            <input
+              name="name"
+              aria-label="Nombre"
+              defaultValue={group.name}
+              maxLength={80}
+              autoFocus
+              className={`${FIELD_CLASS} w-56 shrink-0`}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] text-muted">Posición</span>
+            <input
+              name="position"
+              type="number"
+              aria-label="Posición"
+              defaultValue={group.position}
+              min={0}
+              max={9999}
+              step={1}
+              className={`${FIELD_CLASS} num w-20 shrink-0`}
+            />
+          </label>
           <button type="submit" disabled={renamingPending} className={PRIMARY_BUTTON_CLASS}>
             {renamingPending ? 'Guardando…' : 'Guardar'}
           </button>
@@ -201,12 +214,12 @@ export function GroupSection({
       ) : null}
 
       {groupError ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+        <p role="alert" className="border-b border-line px-3 py-2 text-sm text-danger">
           {groupError}
         </p>
       ) : null}
 
-      <table className="w-full border-collapse text-sm">
+      <table className="w-full border-collapse text-[13px]">
         <caption className="sr-only">Conceptos de {group.name}</caption>
         <thead>
           <tr>
@@ -214,18 +227,15 @@ export function GroupSection({
               <th
                 key={column.label}
                 scope="col"
-                className={`border-b border-slate-400 px-2 py-1.5 font-medium dark:border-slate-600 ${
+                className={`border-b border-line px-2.5 pt-2 pb-1.5 text-[10.5px] font-medium tracking-[0.05em] text-muted uppercase ${
                   column.numeric ? 'text-right' : 'text-left'
-                }`}
+                } ${column.width ?? ''}`}
               >
                 {column.label}
               </th>
             ))}
-            <th
-              scope="col"
-              className="border-b border-slate-400 px-2 py-1.5 text-left font-medium dark:border-slate-600"
-            >
-              Acciones
+            <th scope="col" className="w-[104px] border-b border-line px-2.5 pt-2 pb-1.5">
+              <span className="sr-only">Acciones</span>
             </th>
           </tr>
         </thead>
@@ -236,12 +246,8 @@ export function GroupSection({
 
           {adding ? (
             <>
-              <tr key={newItemKey}>
-                <ItemFields
-                  formId={newItemFormId}
-                  groups={groups}
-                  defaultGroupId={groupId}
-                />
+              <tr key={newItemKey} className="bg-canvas">
+                <ItemFields formId={newItemFormId} groups={groups} defaultGroupId={groupId} />
                 <td className={CELL_CLASS}>
                   {/*
                     Same two reasons as the edit row: the form cannot wrap the
@@ -261,7 +267,7 @@ export function GroupSection({
               {addError ? (
                 <tr>
                   <td colSpan={ITEM_TABLE_COLUMN_COUNT} className={CELL_CLASS}>
-                    <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+                    <p role="alert" className="text-sm text-danger">
                       {addError}
                     </p>
                   </td>
@@ -274,7 +280,7 @@ export function GroupSection({
             <tr>
               <td
                 colSpan={ITEM_TABLE_COLUMN_COUNT}
-                className={`${CELL_CLASS} text-slate-600 dark:text-slate-400`}
+                className={`${CELL_CLASS} h-[34px] text-muted`}
               >
                 Este grupo no tiene conceptos.
               </td>

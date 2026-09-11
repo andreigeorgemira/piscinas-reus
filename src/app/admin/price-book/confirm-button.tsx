@@ -13,14 +13,20 @@ import { useFormStatus } from 'react-dom'
  * -- nothing else on the page should move while the question is open.
  *
  * Every use of this button is destructive, so it carries the destructive
- * styling itself; there is no className to pass.
+ * styling itself; `className` only chooses between the labelled and the
+ * icon-sized shape.
  */
 export function ConfirmButton({
   question,
+  label,
+  className,
   children,
 }: {
   /** The one-sentence question. It must name what is about to be lost. */
   question: string
+  /** The accessible name, when the visible content is an icon. */
+  label?: string
+  className?: string
   children: ReactNode
 }) {
   // Reads the pending state of the enclosing <form>, so this button must be
@@ -31,6 +37,7 @@ export function ConfirmButton({
     <button
       type="submit"
       disabled={pending}
+      aria-label={label}
       onClick={(event) => {
         // preventDefault on the click is what cancels the submission: the
         // form action never runs, so there is nothing to undo afterwards.
@@ -38,7 +45,10 @@ export function ConfirmButton({
           event.preventDefault()
         }
       }}
-      className="rounded border border-red-700 px-2 py-1 text-xs whitespace-nowrap text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-red-700 disabled:opacity-60 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-950 dark:focus-visible:outline-red-400"
+      className={
+        className ??
+        'flex h-[26px] items-center rounded-[5px] border border-danger px-2.5 text-xs font-medium whitespace-nowrap text-danger hover:bg-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:opacity-60'
+      }
     >
       {children}
     </button>

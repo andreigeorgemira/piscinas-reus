@@ -2,7 +2,7 @@
 
 import { startTransition, useActionState, useEffect, useRef, useState } from 'react'
 import { formatMoney } from '@/lib/price-book/decimal'
-import { UNGROUPED_NAME, type PriceBookItem } from '@/lib/price-book/queries'
+import type { PriceBookItem } from '@/lib/price-book/queries'
 import { UNIT_LABELS } from '@/lib/price-book/schema'
 import { idleState, type ActionState } from './action-state'
 import { deleteItem, setItemActive, updateItem } from './actions'
@@ -13,11 +13,24 @@ import {
   ItemFields,
   type GroupOption,
 } from './item-fields'
+import {
+  BUTTON_CLASS,
+  DANGER_ICON_BUTTON_CLASS,
+  ICON_BUTTON_CLASS,
+  PRIMARY_BUTTON_CLASS,
+} from './ui'
 
-const BUTTON_CLASS =
-  'rounded border border-slate-400 px-2 py-1 text-xs whitespace-nowrap hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-700 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800 dark:focus-visible:outline-blue-400'
-
-const PRIMARY_BUTTON_CLASS = `${BUTTON_CLASS} bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300`
+const ICON_PROPS = {
+  width: 13,
+  height: 13,
+  viewBox: '0 0 16 16',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.5,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  'aria-hidden': true,
+} as const
 
 /**
  * What updateItem returned, plus which opening of the editor asked for it.
@@ -86,7 +99,6 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
   }
 
   const formId = `item-${item.id}`
-  const groupName = groups.find((group) => group.id === item.groupId)?.name ?? UNGROUPED_NAME
   // Only the message this opening of the editor produced. Every open and every
   // close moves the session on, so a message left behind by an editor that was
   // cancelled cannot reappear over the next one's clean fields.
@@ -94,7 +106,7 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
 
   return (
     <>
-      <tr className={item.isActive ? undefined : 'text-slate-500 dark:text-slate-400'}>
+      <tr className={`group hover:bg-canvas ${item.isActive ? '' : 'text-muted'}`}>
         {editing ? (
           <>
             <ItemFields
@@ -118,17 +130,13 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
                 id={formId}
                 action={saveAction}
                 onReset={(event) => event.preventDefault()}
-                className="flex gap-1"
+                className="flex flex-col gap-1"
               >
                 <input type="hidden" name="id" value={item.id} />
                 <button type="submit" disabled={saving} className={PRIMARY_BUTTON_CLASS}>
                   {saving ? 'Guardando…' : 'Guardar'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setEditing(false)}
-                  className={BUTTON_CLASS}
-                >
+                <button type="button" onClick={() => setEditing(false)} className={BUTTON_CLASS}>
                   Cancelar
                 </button>
               </form>
@@ -136,27 +144,45 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
           </>
         ) : (
           <>
-            <td className={`${CELL_CLASS} font-mono whitespace-nowrap`}>{item.code ?? '—'}</td>
-            <td className={CELL_CLASS}>
-              <span>{item.name}</span>
-              {item.description ? (
-                <span className="block text-xs text-slate-600 dark:text-slate-400">
-                  {item.description}
-                </span>
-              ) : null}
+            <td className={`${CELL_CLASS} h-[34px] font-mono text-xs whitespace-nowrap text-muted`}>
+              {item.code ?? '—'}
             </td>
-            <td className={CELL_CLASS}>{groupName}</td>
-            <td className={CELL_CLASS}>{UNIT_LABELS[item.unit]}</td>
-            <td className={`${CELL_CLASS} text-right tabular-nums`}>
+            <td className={CELL_CLASS}>
+              <div className="flex min-w-0 items-baseline gap-2">
+                <span className="font-medium whitespace-nowrap">{item.name}</span>
+                {item.description ? (
+                  <span className="truncate text-[11.5px] text-faint">{item.description}</span>
+                ) : null}
+              </div>
+            </td>
+            <td className={`${CELL_CLASS} text-xs text-muted`}>{UNIT_LABELS[item.unit]}</td>
+            <td className={`${CELL_CLASS} num text-right text-muted`}>
               {formatMoney(item.unitCost)}
             </td>
-            <td className={`${CELL_CLASS} text-right tabular-nums`}>
+            <td className={`${CELL_CLASS} num text-right font-medium`}>
               {formatMoney(item.unitPrice)}
             </td>
             {/* Text, not only the grey row: colour alone is not a state. */}
-            <td className={CELL_CLASS}>{item.isActive ? 'Sí' : 'No'}</td>
             <td className={CELL_CLASS}>
-              <div className="flex gap-1">
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-px text-[11px] ${
+                  item.isActive
+                    ? 'border-line bg-surface-sunk text-ink-soft'
+                    : 'border-warn/40 bg-warn-soft text-warn'
+                }`}
+              >
+                {item.isActive ? 'Sí' : 'No'}
+              </span>
+            </td>
+            <td className={CELL_CLASS}>
+              {/*
+                The actions sit at 0 opacity until the row is hovered or
+                something inside it takes focus, so ten rows of buttons do not
+                compete with ten rows of prices. Opacity, not `hidden`: the
+                buttons stay in the tab order and in the accessibility tree,
+                and focus-within brings them back for anyone not using a mouse.
+              */}
+              <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 <button
                   ref={editButton}
                   type="button"
@@ -165,9 +191,11 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
                     setOneClickError(null)
                     setEditing(true)
                   }}
-                  className={BUTTON_CLASS}
+                  className={ICON_BUTTON_CLASS}
                 >
-                  Editar
+                  <svg {...ICON_PROPS}>
+                    <path d="M11.2 2.6a1.6 1.6 0 0 1 2.2 2.2L5.6 12.6l-3 .8.8-3Z" />
+                  </svg>
                 </button>
                 <form action={submitSetActive}>
                   <input type="hidden" name="id" value={item.id} />
@@ -180,17 +208,34 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
                   <button
                     type="submit"
                     aria-label={`${item.isActive ? 'Retirar' : 'Reactivar'} ${item.name}`}
-                    className={BUTTON_CLASS}
+                    className={ICON_BUTTON_CLASS}
                   >
-                    {item.isActive ? 'Retirar' : 'Reactivar'}
+                    {item.isActive ? (
+                      <svg {...ICON_PROPS}>
+                        <path d="M2.2 5.4h11.6v7.2a.8.8 0 0 1-.8.8H3a.8.8 0 0 1-.8-.8Z" />
+                        <path d="M1.6 2.6h12.8v2.8H1.6Z" />
+                        <path d="M6.4 8.8h3.2" />
+                      </svg>
+                    ) : (
+                      <svg {...ICON_PROPS}>
+                        <path d="M13.4 8a5.4 5.4 0 1 1-1.6-3.8" />
+                        <path d="M13.6 2.4v3.2h-3.2" />
+                      </svg>
+                    )}
                   </button>
                 </form>
                 <form action={submitDelete}>
                   <input type="hidden" name="id" value={item.id} />
                   <ConfirmButton
+                    label={`Borrar ${item.name}`}
+                    className={DANGER_ICON_BUTTON_CLASS}
                     question={`¿Borrar «${item.name}» del tarifario? No se puede deshacer. Si solo quieres dejar de ofrecerlo, usa Retirar.`}
                   >
-                    Borrar
+                    <svg {...ICON_PROPS}>
+                      <path d="M2.8 4.2h10.4" />
+                      <path d="M6.2 4.2V2.8h3.6v1.4" />
+                      <path d="M4.2 4.2h7.6l-.6 8.2a.8.8 0 0 1-.8.8H5.6a.8.8 0 0 1-.8-.8Z" />
+                    </svg>
                   </ConfirmButton>
                 </form>
               </div>
@@ -201,7 +246,7 @@ export function ItemRow({ item, groups }: { item: PriceBookItem; groups: GroupOp
       {error ? (
         <tr>
           <td colSpan={ITEM_TABLE_COLUMN_COUNT} className={CELL_CLASS}>
-            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            <p role="alert" className="text-sm text-danger">
               {error}
             </p>
           </td>

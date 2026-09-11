@@ -3,13 +3,13 @@
 import { startTransition, useActionState, useId, useState } from 'react'
 import { idleState, type ActionState } from './action-state'
 import { createGroup } from './actions'
-
-const FIELD_CLASS =
-  'rounded border border-slate-400 bg-transparent px-2 py-1.5 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-700 dark:border-slate-600 dark:focus-visible:outline-blue-400'
+import { FIELD_CLASS, PRIMARY_BUTTON_CLASS } from './ui'
 
 /**
  * Creating a group is a standalone form, not a table row, so its fields carry
- * visible labels rather than the aria-labels the dense rows rely on.
+ * visible labels rather than the aria-labels the dense rows rely on. They sit
+ * beside the fields instead of above them: this form lives in the toolbar,
+ * and stacked labels would cost the strip twice the height for two words.
  */
 export function NewGroupForm({ nextPosition }: { nextPosition: number }) {
   const nameId = useId()
@@ -40,48 +40,40 @@ export function NewGroupForm({ nextPosition }: { nextPosition: number }) {
       // reset event is cancelable, so the fields clear on success only, through
       // the key below.
       onReset={(event) => event.preventDefault()}
-      className="flex flex-wrap items-end gap-2"
+      className="flex items-center gap-2"
     >
-      <div className="flex flex-col gap-1">
-        <label htmlFor={nameId} className="text-sm font-medium">
-          Nuevo grupo
-        </label>
-        <input
-          key={`name-${fieldsKey}`}
-          id={nameId}
-          name="name"
-          maxLength={80}
-          className={FIELD_CLASS}
-        />
-      </div>
+      <label htmlFor={nameId} className="text-[11px] whitespace-nowrap text-muted">
+        Nuevo grupo
+      </label>
+      <input
+        key={`name-${fieldsKey}`}
+        id={nameId}
+        name="name"
+        maxLength={80}
+        className={`${FIELD_CLASS} h-[26px] w-40 shrink-0 py-0`}
+      />
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor={positionId} className="text-sm font-medium">
-          Posición
-        </label>
-        <input
-          key={`position-${fieldsKey}`}
-          id={positionId}
-          name="position"
-          type="number"
-          defaultValue={nextPosition}
-          min={0}
-          max={9999}
-          step={1}
-          className={`${FIELD_CLASS} w-24`}
-        />
-      </div>
+      <label htmlFor={positionId} className="text-[11px] whitespace-nowrap text-muted">
+        Posición
+      </label>
+      <input
+        key={`position-${fieldsKey}`}
+        id={positionId}
+        name="position"
+        type="number"
+        defaultValue={nextPosition}
+        min={0}
+        max={9999}
+        step={1}
+        className={`${FIELD_CLASS} num h-[26px] w-16 shrink-0 py-0`}
+      />
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-60 dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300 dark:focus-visible:outline-blue-400"
-      >
+      <button type="submit" disabled={pending} className={PRIMARY_BUTTON_CLASS}>
         {pending ? 'Creando…' : 'Crear grupo'}
       </button>
 
       {state.error ? (
-        <p role="alert" className="w-full text-sm text-red-700 dark:text-red-400">
+        <p role="alert" className="text-xs text-danger">
           {state.error}
         </p>
       ) : null}

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { PageHeader } from '@/app/admin/page-header'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { ImportForm } from './import-form'
 
@@ -15,18 +16,19 @@ export default async function ImportPriceBookPage() {
   await requireAdmin()
 
   return (
-    <main className="flex min-h-screen flex-col gap-8 p-8">
-      <div className="flex flex-col gap-2">
+    <>
+      <PageHeader title="Importar tarifario">
         <Link
           href="/admin/price-book"
-          className="w-fit text-sm underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 dark:focus-visible:outline-blue-400"
+          className="flex h-[30px] items-center rounded-[5px] border border-line bg-surface px-2.5 text-xs font-medium text-ink-soft hover:border-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
-          ← Tarifario
+          Volver al tarifario
         </Link>
-        <h1 className="text-2xl font-semibold">Importar tarifario</h1>
-      </div>
+      </PageHeader>
 
-      <ImportForm />
-    </main>
+      <div className="p-5">
+        <ImportForm />
+      </div>
+    </>
   )
 }

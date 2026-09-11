@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { listPriceBook, UNGROUPED_NAME } from '@/lib/price-book/queries'
+import { listPriceBook, UNGROUPED_FILTER, UNGROUPED_NAME } from '@/lib/price-book/queries'
 import { adminDb, createUser, makeAdmin, resetDatabase, uniqueEmail } from './helpers/db'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -155,12 +155,13 @@ describe('listPriceBook ungrouped bucket', () => {
   })
 })
 
-describe('listPriceBook row cap', () => {
-  it('reports the total when the server truncates the item query', async () => {
-    // PostgREST returns at most max_rows rows (1000, supabase/config.toml)
-    // and neither query in listPriceBook paginates, so past that point the
-    // screen shows a slice. The counts are the only thing that says so --
-    // drop `count: 'exact'` and this is the test that notices.
+describe('listPriceBook paging', () => {
+  it('returns one page at a time and counts the whole catalogue', async () => {
+    // PostgREST returns at most max_rows rows (1000, supabase/config.toml).
+    // The query asks for a page, so the cap is never what decides how much
+    // comes back -- but the exact count still has to describe the whole
+    // catalogue, because that is what the pager is built from. Drop
+    // `count: 'exact'` and this is the test that notices.
     const db = adminDb()
     const marker = 'Cap fixture'
     const bulk = Array.from({ length: 1001 }, (_, index) => ({
@@ -177,13 +178,17 @@ describe('listPriceBook row cap', () => {
     if (insertError) throw insertError
 
     try {
-      const listing = await listPriceBook(staff)
+      const listing = await listPriceBook(staff, { pageSize: 50 })
       expect(listing.itemsTotal).toBeGreaterThan(1000)
-      expect(listing.itemsShown).toBe(1000)
-      expect(listing.itemsShown).toBeLessThan(listing.itemsTotal)
-      // Groups are nowhere near the cap, so their two numbers must agree --
-      // otherwise a screen could claim a truncation that never happened.
-      expect(listing.groupsShown).toBe(listing.groupsTotal)
+      expect(listing.itemsShown).toBe(50)
+      expect(listing.pageCount).toBe(Math.ceil(listing.itemsTotal / 50))
+
+      const second = await listPriceBook(staff, { pageSize: 50, page: 2 })
+      const firstCodes = listing.groups.flatMap((g) => g.items.map((i) => i.code))
+      const secondCodes = second.groups.flatMap((g) => g.items.map((i) => i.code))
+      expect(secondCodes).toHaveLength(50)
+      // Ordered by code and sliced by range, so the two pages share nothing.
+      expect(secondCodes.some((code) => firstCodes.includes(code))).toBe(false)
     } finally {
       const { error: cleanupError } = await db
         .from('price_book_items')
@@ -193,10 +198,51 @@ describe('listPriceBook row cap', () => {
     }
   })
 
-  it('reports equal counts for a catalogue the server returns whole', async () => {
+  it('reports one page for a catalogue that fits on one', async () => {
     const listing = await listPriceBook(staff)
     expect(listing.itemsShown).toBe(listing.itemsTotal)
-    expect(listing.groupsShown).toBe(listing.groupsTotal)
+    expect(listing.pageCount).toBe(1)
+    expect(listing.page).toBe(1)
+  })
+
+  it('lists every group even when the page shows none of its items', async () => {
+    const listing = await listPriceBook(staff, { search: 'no-such-concept-anywhere' })
+    expect(listing.itemsTotal).toBe(0)
+    expect(listing.allGroups.map((g) => g.name)).toContain('Albanileria')
+  })
+})
+
+describe('listPriceBook filters', () => {
+  it('matches a search against the code', async () => {
+    const listing = await listPriceBook(staff, { search: 'ALB-001' })
+    const codes = listing.groups.flatMap((g) => g.items.map((i) => i.code))
+    expect(codes).toEqual(['ALB-001'])
+  })
+
+  it('matches a search against the name, case-insensitively', async () => {
+    const byName = await listPriceBook(staff, { search: 'suelto' })
+    const names = byName.groups.flatMap((g) => g.items.map((i) => i.name))
+    expect(names).toContain('Suelto')
+  })
+
+  it('survives a search term full of PostgREST filter syntax', async () => {
+    // An unquoted value would split this on the comma and send `y)` as a
+    // condition of its own, which comes back as a 400 rather than as no
+    // results. See quoteFilterValue in src/lib/price-book/queries.ts.
+    const listing = await listPriceBook(staff, { search: 'x,(y)"z' })
+    expect(listing.itemsTotal).toBe(0)
+  })
+
+  it('narrows to one group', async () => {
+    const listing = await listPriceBook(staff, { groupId })
+    const groupsWithItems = listing.groups.filter((g) => g.items.length > 0)
+    expect(groupsWithItems.map((g) => g.name)).toEqual(['Albanileria'])
+  })
+
+  it('narrows to the items filed under no group', async () => {
+    const listing = await listPriceBook(staff, { groupId: UNGROUPED_FILTER })
+    const items = listing.groups.flatMap((g) => g.items)
+    expect(items.map((i) => i.name)).toEqual(['Suelto'])
   })
 })
 

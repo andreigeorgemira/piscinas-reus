@@ -16,7 +16,7 @@ const csvLabel = 'Pega aquí el CSV, o el bloque de celdas copiado desde Excel'
 test.beforeAll(async () => {
   const admin = adminDb()
 
-  // Sweeps the 1001-row fixture the truncation test at the end of this file
+  // Sweeps the 1001-row fixture the paging test near the end of this file
   // seeds, in case an earlier run never got to delete it. That test cleans
   // up in a `finally`, which Playwright does not guarantee runs when a test
   // hits its timeout -- and leaked 'Relleno ' rows sort ahead of every code
@@ -450,19 +450,17 @@ test('commits what the preview showed, not what the textarea holds when Importar
   expect(edited).toHaveLength(0)
 })
 
-test('says on screen that the catalogue is truncated, instead of stopping silently', async ({
-  page,
-}) => {
-  // The one screen-level proof that a capped read is visible rather than
-  // silent: PostgREST returns at most max_rows rows (1000,
-  // supabase/config.toml) and listPriceBook does not paginate.
+test('pages through a catalogue too big for one screen', async ({ page }) => {
+  // The one screen-level proof that a catalogue past PostgREST's max_rows
+  // (1000, supabase/config.toml) is reachable rather than silently cut off:
+  // the screen asks for a page at a time and the pager walks the rest.
   //
   // Seeded and torn down inside this test. 1001 extra concepts push every
-  // other row this file creates out of the first 1000 the server returns, so
-  // leaving them behind would break the tests around it. That is safe here
-  // because tests in one file run serially (fullyParallel: false in
-  // playwright.config.ts) and auth.spec.ts -- the only file that can run
-  // alongside this one -- never opens this screen.
+  // other row this file creates off the first page, so leaving them behind
+  // would break the tests around it. That is safe here because tests in one
+  // file run serially (fullyParallel: false in playwright.config.ts) and
+  // auth.spec.ts -- the only file that can run alongside this one -- never
+  // opens this screen.
   const admin = adminDb()
   const marker = `Relleno ${runId}`
   const bulk = Array.from({ length: 1001 }, (_, index) => ({
@@ -480,9 +478,21 @@ test('says on screen that the catalogue is truncated, instead of stopping silent
   try {
     await loginAsStaff(page)
     await page.goto('/admin/price-book')
-    await expect(
-      page.getByText(/Esta pantalla muestra 1000 de \d+ conceptos/),
-    ).toBeVisible()
+
+    const pager = page.getByRole('navigation', { name: 'Páginas del tarifario' })
+    await expect(pager.getByText(/Mostrando 50 de \d+ conceptos/)).toBeVisible()
+    await expect(pager.getByText('1 /')).toBeVisible()
+
+    const firstCode = `FILL-${runId}-0000`
+    await expect(page.getByRole('cell', { name: firstCode, exact: true })).toBeVisible()
+
+    await pager.getByRole('link', { name: 'Siguiente' }).click()
+
+    // A different page, not the same one re-rendered: page two starts where
+    // page one stopped, and the row that opened page one is gone from it.
+    await expect(pager.getByText('2 /')).toBeVisible()
+    await expect(page.getByRole('cell', { name: firstCode, exact: true })).toHaveCount(0)
+    await expect(page.getByRole('cell', { name: `FILL-${runId}-0050`, exact: true })).toBeVisible()
   } finally {
     const { error: cleanupError } = await admin
       .from('price_book_items')
@@ -490,4 +500,37 @@ test('says on screen that the catalogue is truncated, instead of stopping silent
       .like('name', `${marker} %`)
     if (cleanupError) throw cleanupError
   }
+})
+
+test('finds a concept by code and keeps the search in the address', async ({ page }) => {
+  const groupName = `Grupo Buscado ${runId}`
+  const code = `SEA-${runId}`
+  const itemName = `Concepto buscado ${runId}`
+
+  await loginAsStaff(page)
+  await page.goto('/admin/price-book')
+
+  await page.getByLabel('Nuevo grupo').fill(groupName)
+  await page.getByRole('button', { name: 'Crear grupo' }).click()
+
+  const region = page.getByRole('region', { name: groupName })
+  await region.getByRole('button', { name: `Añadir concepto a ${groupName}` }).click()
+  await region.getByLabel('Código', { exact: true }).fill(code)
+  await region.getByLabel('Concepto', { exact: true }).fill(itemName)
+  await region.getByLabel('Coste', { exact: true }).fill('7,00')
+  await region.getByLabel('Precio', { exact: true }).fill('14,00')
+  await region.getByRole('button', { name: 'Añadir', exact: true }).click()
+  await expect(region.getByRole('button', { name: `Editar ${itemName}` })).toBeVisible()
+
+  await page.getByRole('searchbox', { name: 'Buscar en el tarifario' }).fill(code)
+  await page.getByRole('searchbox', { name: 'Buscar en el tarifario' }).press('Enter')
+
+  // A GET form, so the search is in the URL and the page is linkable.
+  await expect(page).toHaveURL(new RegExp(`[?&]q=${code}`))
+  await expect(page.getByRole('cell', { name: code, exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: itemName, exact: true })).toHaveCount(1)
+
+  // Nothing else survived the filter: the seed catalogue is still there, it
+  // is simply not on this screen.
+  await expect(page.getByRole('region', { name: 'Estructura' })).toHaveCount(0)
 })
