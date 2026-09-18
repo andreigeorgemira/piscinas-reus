@@ -161,6 +161,33 @@
   --shadow-card: var(--shadow-card);
   --shadow-pop: var(--shadow-pop);
 
+  /*
+   * Dragging a catalogue row (price-book/item-dnd.tsx). The card lifts and
+   * tilts a hair as it leaves the table; the row that lands holds the accent
+   * tint for a beat, then lets it go. Both run under motion-safe only.
+   */
+  --animate-ghost-lift: ghost-lift 180ms cubic-bezier(0.2, 0, 0, 1) both;
+  --animate-row-arrive: row-arrive 1.6s cubic-bezier(0.2, 0, 0, 1);
+
+  @keyframes ghost-lift {
+    from {
+      transform: scale(1) rotate(0deg);
+    }
+    to {
+      transform: scale(1.02) rotate(0.6deg);
+    }
+  }
+
+  @keyframes row-arrive {
+    0%,
+    35% {
+      background-color: var(--accent-soft);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
@@ -214,6 +241,29 @@ body {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "zero" 1;
   letter-spacing: -0.01em;
+}
+
+/*
+ * While a catalogue row is being dragged the pointer is a closed hand and
+ * nothing it passes over gets selected. Set on the root and inherited, not
+ * with a universal selector: flipping the attribute would otherwise restyle
+ * every element of a thousand-row table at the moment of pick-up.
+ */
+html[data-dragging] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/*
+ * ...and the table stops answering to the pointer. Every row the card passes
+ * over would otherwise take and lose :hover, and each of those changes
+ * restyled the whole table: measured on a 1000-row book, ten pointer moves
+ * cost 3-5 s of style recalculation with hover live and 0.6 s without. The
+ * drop target is found from coordinates, not from what is under the pointer,
+ * and a row lighting up under a card that is not going there is wrong anyway.
+ */
+html[data-dragging] table {
+  pointer-events: none;
 }
 
 /*

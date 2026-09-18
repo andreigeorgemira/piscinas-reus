@@ -106,7 +106,12 @@ async function seededBookId(): Promise<string> {
 async function gotoPriceBook(page: Page): Promise<string> {
   await page.goto('/admin/price-books')
   await page.getByRole('link', { name: 'Tarifario general' }).click()
-  await expect(page).toHaveURL(/\/admin\/price-books\/[0-9a-f-]+/)
+  // Longer than the default 5 s: the address changes only once the book has
+  // rendered, and the big-catalogue test below opens a book of 1000+ rows.
+  // On the dev server that takes 3.5-4.5 s with the machine idle, measured
+  // the same before and after the drag rewrite, so any load at all pushed
+  // the default over.
+  await expect(page).toHaveURL(/\/admin\/price-books\/[0-9a-f-]+/, { timeout: 15_000 })
   return new URL(page.url()).pathname
 }
 
@@ -173,6 +178,87 @@ test('creates a group, adds a concept and edits its price inline', async ({ page
   await expect(region.getByRole('button', { name: `Editar ${itemName}` })).toBeVisible()
   // The price column carries its unit now, so the cell reads '22,50 €'.
   await expect(region.getByRole('cell', { name: /^22,50/ })).toBeVisible()
+})
+
+test('drags a concept into another group and it stays there', async ({ page }) => {
+  const bookId = await seededBookId()
+  // Named 'Grupo …' so the sweep in beforeAll clears them on the next run.
+  const fromName = `Grupo Origen ${runId}`
+  const toName = `Grupo Destino ${runId}`
+  const itemName = `Arrastrado ${runId}`
+
+  const db = adminDb()
+  const { data: groups, error: groupError } = await db
+    .from('price_book_groups')
+    .insert([
+      { price_book_id: bookId, name: fromName, position: 900 },
+      { price_book_id: bookId, name: toName, position: 901 },
+    ])
+    .select('id, name')
+  if (groupError) throw groupError
+  const fromId = groups.find((group) => group.name === fromName)!.id
+  const toId = groups.find((group) => group.name === toName)!.id
+
+  const { data: item, error: itemError } = await db
+    .from('price_book_items')
+    .insert({
+      price_book_id: bookId,
+      group_id: fromId,
+      name: itemName,
+      unit: 'unit',
+      unit_cost: 1,
+      unit_price: 2,
+    })
+    .select('id')
+    .single()
+  if (itemError) throw itemError
+
+  await loginAsStaff(page)
+  await gotoPriceBook(page)
+
+  const source = page.getByRole('rowgroup', { name: fromName })
+  const destination = page.getByRole('rowgroup', { name: toName })
+  // Centred in the table's own scroll area, clear of the edges where holding
+  // a row starts scrolling the table under it.
+  await destination.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+
+  const handle = source.getByRole('button', { name: `Mover ${itemName} de grupo` })
+  const from = (await handle.boundingBox())!
+  const heading = (await destination.locator('th').first().boundingBox())!
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  // Past the few pixels a press needs before it counts as a drag, then over
+  // the other group in steps, the way a hand moves.
+  await page.mouse.move(from.x + from.width / 2 + 8, from.y + from.height / 2 + 8, { steps: 4 })
+  await page.mouse.move(heading.x + 120, heading.y + heading.height / 2, { steps: 12 })
+
+  // The card under the pointer names the destination before the drop.
+  await expect(page.getByText(`Mover a ${toName}`)).toBeVisible()
+  await page.mouse.up()
+
+  await expect(destination.getByRole('button', { name: `Mover ${itemName} de grupo` })).toBeVisible()
+  await expect(source.getByRole('button', { name: `Mover ${itemName} de grupo` })).toHaveCount(0)
+
+  // Not only on screen: the write reached the database, and a reload agrees.
+  await expect
+    .poll(async () => {
+      const { data, error } = await db
+        .from('price_book_items')
+        .select('group_id')
+        .eq('id', item.id)
+        .single()
+      if (error) throw error
+      return data.group_id
+    })
+    .toBe(toId)
+
+  await page.reload()
+  await expect(
+    page
+      .getByRole('rowgroup', { name: toName })
+      .getByRole('button', { name: `Mover ${itemName} de grupo` }),
+  ).toBeVisible()
 })
 
 test('reports a duplicate code in Spanish instead of crashing', async ({ page }) => {

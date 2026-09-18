@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { PageHeader } from '@/app/admin/page-header'
 import { GroupSection } from '@/app/admin/price-book/group-section'
 import { GroupsOpenProvider, ToggleAllGroups } from '@/app/admin/price-book/groups-open'
+import { ItemDragArea } from '@/app/admin/price-book/item-dnd'
 import { PRICE_BOOK_COLUMNS } from '@/app/admin/price-book/item-fields'
 import { NewGroupForm } from '@/app/admin/price-book/new-group-form'
 import { ACTION_BAR_FORM_ID, ActionBar, FilterChip } from '@/components/ui/action-bar'
@@ -209,7 +210,7 @@ export default async function PriceBookDetailPage({
         </Link>
       </PageHeader>
 
-      <div className="min-h-0 flex-1 p-5">
+      <ItemDragArea className="min-h-0 flex-1 p-5">
         <GroupsOpenProvider>
           <DataTable
             columns={PRICE_BOOK_COLUMNS}
@@ -414,7 +415,7 @@ export default async function PriceBookDetailPage({
             ))}
           </DataTable>
         </GroupsOpenProvider>
-      </div>
+      </ItemDragArea>
     </>
   )
 }

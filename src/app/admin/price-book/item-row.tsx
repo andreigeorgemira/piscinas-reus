@@ -1,9 +1,11 @@
 'use client'
 
 import {
+  memo,
   startTransition,
   useActionState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useTransition,
@@ -16,15 +18,15 @@ import { formatEuros } from '@/lib/price-book/decimal'
 import type { PriceBookItem } from '@/lib/price-book/queries'
 import { UNIT_LABELS } from '@/lib/price-book/schema'
 import { idleState, type ActionState } from './action-state'
-import { deleteItem, moveItem, setItemActive, updateItem } from './actions'
-import { DRAG_MIME } from './drag'
+import { deleteItem, setItemActive, updateItem } from './actions'
+import { useItemDragHandle, useItemMoves } from './item-dnd'
 import {
   CELL_CLASS,
   ITEM_TABLE_COLUMN_COUNT,
   ItemFields,
   type GroupOption,
 } from './item-fields'
-import { BUTTON_CLASS, DANGER_ICON_BUTTON_CLASS, ICON_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from './ui'
+import { DANGER_ICON_BUTTON_CLASS, ICON_BUTTON_CLASS } from './ui'
 
 const ICON_PROPS = {
   width: 14,
@@ -49,7 +51,14 @@ const ICON_PROPS = {
  */
 type SaveState = ActionState & { session: number }
 
-export function ItemRow({
+/**
+ * One concept of the catalogue.
+ *
+ * Memoised: a group re-renders whenever a move lands in it or leaves it, and
+ * a big book puts hundreds of these, each with its own menu and tooltips,
+ * under one group. Their props only change when the row does.
+ */
+export const ItemRow = memo(function ItemRow({
   item,
   groups,
   groupName,
@@ -63,6 +72,23 @@ export function ItemRow({
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [pending, startAction] = useTransition()
   const editButton = useRef<HTMLButtonElement>(null)
+  const rowRef = useRef<HTMLTableRowElement>(null)
+  const { move: moveTo, consumeArrival } = useItemMoves()
+  const { handleRef, handleProps, isDragging } = useItemDragHandle(item)
+
+  // A moved row mounts afresh in its new group. Tint it for a beat so the eye
+  // finds where it went -- a class added straight to the element, so marking
+  // one row does not re-render the rest of the catalogue.
+  useLayoutEffect(() => {
+    const row = rowRef.current
+    if (!row || !consumeArrival(item.id)) return
+    row.classList.add('motion-safe:animate-row-arrive')
+    row.addEventListener(
+      'animationend',
+      () => row.classList.remove('motion-safe:animate-row-arrive'),
+      { once: true },
+    )
+  }, [consumeArrival, item.id])
 
   const editing = editor.open
 
@@ -134,24 +160,19 @@ export function ItemRow({
     })
   }
 
-  function runMove(groupId: string | null, name: string) {
-    startAction(async () => {
-      const data = new FormData()
-      data.set('id', item.id)
-      data.set('group_id', groupId ?? '')
-      const result = await moveItem(idleState, data)
-      if (result.error) toast.error(result.error)
-      else toast.success(`«${item.name}» movido a ${name}`)
-    })
-  }
-
   const formId = `item-${item.id}`
   const error = saveState.session === editor.session ? saveState.error : null
 
   if (editing) {
     return (
       <>
-        <tr className="bg-canvas">
+        <tr
+          className="bg-surface-hover"
+          // Esc puts the row back as it was, like every other inline edit.
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') setEditing(false)
+          }}
+        >
           <ItemFields formId={formId} item={item} />
           <td className={CELL_CLASS}>
             {/*
@@ -168,7 +189,7 @@ export function ItemRow({
               id={formId}
               action={saveAction}
               onReset={(event) => event.preventDefault()}
-              className="flex flex-col gap-1.5"
+              className="flex items-center justify-end gap-1"
             >
               <input type="hidden" name="id" value={item.id} />
               {/*
@@ -179,12 +200,35 @@ export function ItemRow({
                 every time someone corrected a price.
               */}
               <input type="hidden" name="group_id" value={item.groupId ?? ''} />
-              <button type="submit" disabled={saving} className={PRIMARY_BUTTON_CLASS}>
-                {saving ? 'Guardando…' : 'Guardar'}
-              </button>
-              <button type="button" onClick={() => setEditing(false)} className={BUTTON_CLASS}>
-                Cancelar
-              </button>
+              {/*
+                Icons in a line, where the row's own actions sit when it is
+                closed: two stacked text buttons made the open row twice as
+                tall as the one it replaced.
+              */}
+              <Tooltip label="Guardar">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  aria-label="Guardar"
+                  className={ICON_BUTTON_CLASS}
+                >
+                  <svg {...ICON_PROPS} strokeWidth={2}>
+                    <path d="m3.2 8.4 3.2 3.2 6.4-6.8" />
+                  </svg>
+                </button>
+              </Tooltip>
+              <Tooltip label="Cancelar">
+                <button
+                  type="button"
+                  onClick={() => setEditing(false)}
+                  aria-label="Cancelar"
+                  className={ICON_BUTTON_CLASS}
+                >
+                  <svg {...ICON_PROPS} strokeWidth={2}>
+                    <path d="m4 4 8 8M12 4l-8 8" />
+                  </svg>
+                </button>
+              </Tooltip>
             </form>
           </td>
         </tr>
@@ -204,7 +248,9 @@ export function ItemRow({
   return (
     <>
       <tr
-        className={`group/row transition-colors hover:bg-surface-hover ${
+        ref={rowRef}
+        data-drag-source={isDragging ? '' : undefined}
+        className={`group/row transition-[background-color,opacity] hover:bg-surface-hover data-[drag-source]:opacity-40 ${
           item.isActive ? '' : 'text-muted'
         } ${pending ? 'opacity-60' : ''}`}
       >
@@ -218,13 +264,13 @@ export function ItemRow({
               <PopoverTrigger asChild>
                 <button
                   type="button"
+                  // Both jobs on one control: dnd-kit's listeners make it
+                  // draggable, and a press that never travels stays a click
+                  // and opens the menu below.
+                  ref={handleRef}
+                  {...handleProps}
                   aria-label={`Mover ${item.name} de grupo`}
-                  draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData(DRAG_MIME, item.id)
-                    event.dataTransfer.effectAllowed = 'move'
-                  }}
-                  className="flex size-6 cursor-grab items-center justify-center rounded text-faint opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+                  className="flex size-6 cursor-grab touch-none items-center justify-center rounded text-faint opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent in-data-[drag-source]:opacity-100"
                 >
                   <svg {...ICON_PROPS} strokeWidth={0} fill="currentColor">
                     <circle cx="6" cy="4" r="1.1" />
@@ -246,7 +292,7 @@ export function ItemRow({
                   key={group.id ?? 'ungrouped'}
                   type="button"
                   disabled={group.name === groupName}
-                  onClick={() => runMove(group.id, group.name)}
+                  onClick={() => moveTo(item, group.id, group.name)}
                   className="flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-surface-hover disabled:text-faint disabled:hover:bg-transparent"
                 >
                   {group.name}
@@ -379,4 +425,4 @@ export function ItemRow({
       />
     </>
   )
-}
+})

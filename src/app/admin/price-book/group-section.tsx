@@ -6,18 +6,12 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Tooltip } from '@/components/ui/tooltip'
 import type { PriceBookGroup } from '@/lib/price-book/queries'
 import { idleState, type ActionState } from './action-state'
-import { createItem, deleteGroup, moveItem, updateGroup } from './actions'
-import { DRAG_MIME } from './drag'
+import { createItem, deleteGroup, updateGroup } from './actions'
 import { useGroupsOpenRequest } from './groups-open'
+import { useGroupDrop, useSectionItems } from './item-dnd'
 import { CELL_CLASS, ITEM_TABLE_COLUMN_COUNT, ItemFields, type GroupOption } from './item-fields'
 import { ItemRow } from './item-row'
-import {
-  BUTTON_CLASS,
-  DANGER_ICON_BUTTON_CLASS,
-  FIELD_CLASS,
-  ICON_BUTTON_CLASS,
-  PRIMARY_BUTTON_CLASS,
-} from './ui'
+import { DANGER_ICON_BUTTON_CLASS, ICON_BUTTON_CLASS, INLINE_FIELD_CLASS } from './ui'
 
 const ICON_PROPS = {
   width: 14,
@@ -82,7 +76,6 @@ export function GroupSection({
   const [renaming, setRenamer] = useState({ open: false, session: 0 })
   const [adding, setAdder] = useState({ open: false, session: 0 })
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const [dragOver, setDragOver] = useState(false)
   const [, startAction] = useTransition()
 
   const renameButton = useRef<HTMLButtonElement>(null)
@@ -146,16 +139,10 @@ export function GroupSection({
     })
   }
 
-  function acceptDrop(itemId: string) {
-    startAction(async () => {
-      const data = new FormData()
-      data.set('id', itemId)
-      data.set('group_id', groupId ?? '')
-      const result = await moveItem(idleState, data)
-      if (result.error) toast.error(result.error)
-      else toast.success(`Concepto movido a ${group.name}`)
-    })
-  }
+  // The rows as the screen should show them: what the server sent, with any
+  // move still on its way to the database already applied.
+  const { items, itemCount } = useSectionItems(group)
+  const { dropRef, dropProps } = useGroupDrop(groupId, group.name, () => setOpen(true))
 
   /**
    * Unfiltered, the honest number is the group's own total: the page is only
@@ -163,7 +150,7 @@ export function GroupSection({
    * the rows on this page, because the total would be a count of concepts
    * the screen is deliberately not showing.
    */
-  const shownCount = filtering ? group.items.length : group.itemCount
+  const shownCount = filtering ? items.length : itemCount
 
   const renameError = renameState.session === renaming.session ? renameState.error : null
   const addError = addState.session === adding.session ? addState.error : null
@@ -171,38 +158,20 @@ export function GroupSection({
   return (
     <>
       <tbody
+        ref={dropRef}
+        {...dropProps}
         aria-label={group.name}
-        className={`group/section ${dragOver ? 'bg-accent-soft' : ''}`}
-        onDragOver={(event) => {
-          // Only a row from this table, and never back into the group it
-          // already sits in -- dragover cannot read the payload, so the
-          // no-op drop is caught on drop instead.
-          if (!event.dataTransfer.types.includes(DRAG_MIME)) return
-          event.preventDefault()
-          event.dataTransfer.dropEffect = 'move'
-          setDragOver(true)
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(event) => {
-          const itemId = event.dataTransfer.getData(DRAG_MIME)
-          setDragOver(false)
-          if (!itemId) return
-          event.preventDefault()
-          if (group.items.some((item) => item.id === itemId)) return
-          acceptDrop(itemId)
-        }}
+        className="group/section transition-colors duration-150 data-[drop-target]:bg-accent-soft/50"
       >
         <tr
-          className={
-            open
-              ? 'bg-surface-sunk'
-              : 'bg-surface transition-colors hover:bg-surface-hover'
-          }
+          className={`transition-colors duration-150 in-data-[drop-target]:bg-accent-soft ${
+            open ? 'bg-surface-sunk' : 'bg-surface hover:bg-surface-hover'
+          }`}
         >
           <th
             scope="colgroup"
             colSpan={ITEM_TABLE_COLUMN_COUNT}
-            className={`px-2 py-1.5 text-left font-medium ${
+            className={`px-2 py-1.5 text-left font-medium in-data-[drop-target]:shadow-[inset_3px_0_0_var(--accent)] ${
               open ? 'border-y border-line' : 'border-b border-line-soft'
             }`}
           >
@@ -224,17 +193,30 @@ export function GroupSection({
                     travel with the name or every rename would reset it.
                   */}
                   <input type="hidden" name="position" value={group.position} />
-                  <input
-                    name="name"
-                    aria-label={`Nombre de ${group.name}`}
-                    defaultValue={group.name}
-                    maxLength={80}
-                    autoFocus
-                    onKeyDown={(event) => {
-                      if (event.key === 'Escape') setRenaming(false)
-                    }}
-                    className={`${FIELD_CLASS} h-7 w-64 text-xs font-semibold tracking-[0.04em] uppercase`}
-                  />
+                  {/*
+                    The chevron stays and the padding matches the heading
+                    button's, so the name turns into a field where it stands
+                    instead of jumping left by the width of the arrow.
+                  */}
+                  <span className="flex items-center gap-2 px-1 py-0.5">
+                    <svg
+                      {...ICON_PROPS}
+                      className={`text-faint ${open ? 'rotate-90' : ''}`}
+                    >
+                      <path d="M6 3.6 10.4 8 6 12.4" />
+                    </svg>
+                    <input
+                      name="name"
+                      aria-label={`Nombre de ${group.name}`}
+                      defaultValue={group.name}
+                      maxLength={80}
+                      autoFocus
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') setRenaming(false)
+                      }}
+                      className={`${INLINE_FIELD_CLASS} w-64 text-xs font-semibold tracking-[0.04em] text-ink uppercase`}
+                    />
+                  </span>
                   <button
                     type="submit"
                     disabled={renamingPending}
@@ -275,7 +257,7 @@ export function GroupSection({
                 >
                   <path d="M6 3.6 10.4 8 6 12.4" />
                 </svg>
-                <span className="text-xs font-semibold tracking-[0.04em] text-ink uppercase">
+                <span className="text-xs font-semibold tracking-[0.04em] text-ink uppercase transition-colors in-data-[drop-target]:text-accent">
                   {group.name}
                 </span>
                 {/*
@@ -340,21 +322,27 @@ export function GroupSection({
         </tr>
 
         {open
-          ? group.items.map((item) => (
+          ? items.map((item) => (
               <ItemRow key={item.id} item={item} groups={groups} groupName={group.name} />
             ))
           : null}
 
         {open && adding.open ? (
           <>
-            <tr key={newItemKey} className="bg-canvas">
+            <tr
+              key={newItemKey}
+              className="bg-surface-hover"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setAdding(false)
+              }}
+            >
               <ItemFields formId={newItemFormId} />
               <td className={CELL_CLASS}>
                 <form
                   id={newItemFormId}
                   action={addAction}
                   onReset={(event) => event.preventDefault()}
-                  className="flex flex-col gap-1.5"
+                  className="flex items-center justify-end gap-1"
                 >
                   {/*
                     The new row belongs to the group it was typed into. There
@@ -363,12 +351,30 @@ export function GroupSection({
                   */}
                   <input type="hidden" name="price_book_id" value={priceBookId} />
                   <input type="hidden" name="group_id" value={groupId ?? ''} />
-                  <button type="submit" disabled={addPending} className={PRIMARY_BUTTON_CLASS}>
-                    {addPending ? 'Añadiendo…' : 'Añadir'}
-                  </button>
-                  <button type="button" onClick={() => setAdding(false)} className={BUTTON_CLASS}>
-                    Cancelar
-                  </button>
+                  <Tooltip label="Añadir">
+                    <button
+                      type="submit"
+                      disabled={addPending}
+                      aria-label="Añadir"
+                      className={ICON_BUTTON_CLASS}
+                    >
+                      <svg {...ICON_PROPS} strokeWidth={2}>
+                        <path d="m3.2 8.4 3.2 3.2 6.4-6.8" />
+                      </svg>
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="Cancelar">
+                    <button
+                      type="button"
+                      onClick={() => setAdding(false)}
+                      aria-label="Cancelar"
+                      className={ICON_BUTTON_CLASS}
+                    >
+                      <svg {...ICON_PROPS} strokeWidth={2}>
+                        <path d="m4 4 8 8M12 4l-8 8" />
+                      </svg>
+                    </button>
+                  </Tooltip>
                 </form>
               </td>
             </tr>
@@ -410,7 +416,7 @@ export function GroupSection({
                   <svg {...ICON_PROPS} strokeWidth={1.8} className="text-faint">
                     <path d="M8 3.4v9.2M3.4 8h9.2" />
                   </svg>
-                  {group.items.length > 0
+                  {items.length > 0
                     ? 'Añadir concepto'
                     : filtering
                       ? 'Ningún concepto de este grupo coincide. Añadir uno'
