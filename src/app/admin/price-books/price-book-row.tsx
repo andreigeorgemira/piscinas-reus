@@ -8,8 +8,8 @@ import { Tooltip } from '@/components/ui/tooltip'
 import { idleState, type ActionState } from '@/app/admin/price-book/action-state'
 import {
   DANGER_ICON_BUTTON_CLASS,
-  FIELD_CLASS,
   ICON_BUTTON_CLASS,
+  INLINE_FIELD_CLASS,
 } from '@/app/admin/price-book/ui'
 import type { PriceBook } from '@/lib/price-book/queries'
 import { deletePriceBook, updatePriceBook } from './actions'
@@ -68,13 +68,20 @@ export function PriceBookRow({ book }: { book: PriceBook }) {
 
   if (editing) {
     return (
-      <tr className="bg-canvas">
+      <tr className="bg-surface-hover">
         <td className={CELL_CLASS} colSpan={2}>
+          {/*
+            The fields wear the classes of the name and the description they
+            replace, so the text stays where it was and only gains a box.
+          */}
           <form
             id={`book-${book.id}`}
             action={saveAction}
             onReset={(event) => event.preventDefault()}
-            className="flex flex-col gap-1.5"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') setEditing(false)
+            }}
+            className="flex flex-col gap-[3px]"
           >
             <input type="hidden" name="id" value={book.id} />
             <input
@@ -83,10 +90,7 @@ export function PriceBookRow({ book }: { book: PriceBook }) {
               defaultValue={book.name}
               maxLength={80}
               autoFocus
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') setEditing(false)
-              }}
-              className={`${FIELD_CLASS} w-full max-w-sm font-medium`}
+              className={`${INLINE_FIELD_CLASS} w-full max-w-sm font-medium`}
             />
             <input
               name="description"
@@ -94,7 +98,7 @@ export function PriceBookRow({ book }: { book: PriceBook }) {
               defaultValue={book.description ?? ''}
               maxLength={300}
               placeholder="Para qué sirve este tarifario"
-              className={`${FIELD_CLASS} w-full max-w-lg text-xs`}
+              className={`${INLINE_FIELD_CLASS} w-full max-w-lg text-xs text-muted`}
             />
             {state.error ? (
               <p role="alert" className="text-xs text-danger">
@@ -136,12 +140,18 @@ export function PriceBookRow({ book }: { book: PriceBook }) {
 
   return (
     <>
-      <tr className="group/row transition-colors hover:bg-surface-hover">
+      <tr className="group/row relative transition-colors hover:bg-surface-hover">
         <td className={CELL_CLASS} colSpan={2}>
           <div className="flex min-w-0 flex-col">
+            {/*
+              The whole row opens the book. The link stays a real link, so
+              Ctrl-click and the keyboard still work, and its ::after is
+              stretched over the row it sits in; the row actions are lifted
+              above that layer so they keep their own clicks.
+            */}
             <Link
               href={`/admin/price-books/${book.id}`}
-              className="w-fit font-medium hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="w-fit font-medium outline-none group-hover/row:text-accent after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-accent"
             >
               {book.name}
             </Link>
@@ -155,7 +165,7 @@ export function PriceBookRow({ book }: { book: PriceBook }) {
         <td className={`${CELL_CLASS} num text-right text-muted`}>{book.groupCount}</td>
         <td className={`${CELL_CLASS} num text-right font-medium`}>{book.itemCount}</td>
         <td className={CELL_CLASS}>
-          <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
+          <div className="relative z-10 flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
             <Tooltip label="Renombrar">
               <button
                 ref={editButton}

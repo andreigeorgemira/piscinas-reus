@@ -29,3 +29,22 @@ export const DANGER_ICON_BUTTON_CLASS =
 
 export const FIELD_CLASS =
   'rounded-md border border-line bg-surface px-2 py-1 text-sm text-ink placeholder:text-faint focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent'
+
+/**
+ * A field standing in for text that is already on screen: the inline edits.
+ *
+ * It has no size of its own. The caller passes the same type classes the
+ * read-only text uses, so the words keep their font, weight, colour and line
+ * height, and the border and padding are paid for with negative margins --
+ * the text does not move and the row does not grow. The thin box and the
+ * caret are the only things that say it can be typed into now. Focus is a
+ * ring, not an outline offset, so it never pushes into the next cell.
+ *
+ * Put it on the input, or on a wrapper <label> when something that is not
+ * typed sits inside the box (the euro sign after a price).
+ */
+export const INLINE_FIELD_CLASS =
+  '-mx-[7px] -my-px rounded-md border border-line bg-surface px-1.5 outline-none placeholder:text-faint transition-shadow focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25'
+
+/** Full cell width for an inline field, winning back its negative margins. */
+export const INLINE_FIELD_FILL_CLASS = 'w-[calc(100%+14px)]'
