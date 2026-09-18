@@ -124,6 +124,16 @@ export default async function PriceBookDetailPage({
     pageSize: filtering ? query.size : null,
   })
 
+  /**
+   * How many rows the screen will mount without being asked. Past this, the
+   * book arrives folded and mounts a group's rows when that group is opened:
+   * the alternative, paging the unfiltered view, splits groups, and a group
+   * split across two pages is a group whose concepts you cannot see together.
+   * Under a filter the rows are the answer to a question, so they stay open.
+   */
+  const FOLD_ABOVE = 300
+  const startGroupsOpen = filtering || listing.itemsShown <= FOLD_ABOVE
+
   const groupName =
     query.group === UNGROUPED_FILTER
       ? UNGROUPED_NAME
@@ -411,6 +421,7 @@ export default async function PriceBookDetailPage({
                 groups={listing.allGroups}
                 priceBookId={id}
                 filtering={filtering}
+                startOpen={startGroupsOpen}
               />
             ))}
           </DataTable>

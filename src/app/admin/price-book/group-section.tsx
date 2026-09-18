@@ -50,6 +50,7 @@ export function GroupSection({
   groups,
   priceBookId,
   filtering,
+  startOpen,
 }: {
   group: PriceBookGroup
   groups: GroupOption[]
@@ -57,11 +58,18 @@ export function GroupSection({
   priceBookId: string
   /** True when a search or a filter is narrowing the screen. */
   filtering: boolean
+  /**
+   * Whether this group shows its rows on arrival. A big book arrives folded:
+   * the rows of a group only mount when it is opened, so the screen never
+   * carries the whole catalogue at once, and no group is split to achieve
+   * that.
+   */
+  startOpen: boolean
 }) {
   const groupId = group.id
   const newItemFormId = `new-item-${groupId ?? 'ungrouped'}`
 
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(startOpen)
 
   // "Fold all" arrives as a stamped request rather than as a value to mirror,
   // so applying it is a one-off: adjust state during render when the stamp
