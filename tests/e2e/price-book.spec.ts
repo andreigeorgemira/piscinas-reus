@@ -44,6 +44,7 @@ test.beforeAll(async () => {
         'name.like.Concepto %',
         'name.like.Codeless %',
         'name.like.Nombre actualizado %',
+        'name.like.Arrastrado %',
       ].join(','),
     )
   if (itemSweepError) throw itemSweepError
