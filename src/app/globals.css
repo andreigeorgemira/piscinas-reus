@@ -1,26 +1,296 @@
 @import "tailwindcss";
 
+/*
+ * Direction A ("Taller"), chosen 2026-09-11: a dense, neutral tool.
+ *
+ * THREE theme states, not two. `:root` carries light. The media query picks
+ * dark up for anyone whose system says so, but only while they have not
+ * chosen -- `:not([data-theme="light"])` is what lets an explicit light
+ * choice win on a dark machine. The last block lets an explicit dark choice
+ * win on a light one. src/app/theme.tsx stamps the attribute.
+ *
+ * Every colour is named for its role, once, here. A component that spells a
+ * hex or a `dark:` variant of its own has stepped outside the system and
+ * will drift the first time the palette moves.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  --canvas: #f6f7f9;
+  --surface: #ffffff;
+  --surface-sunk: #f1f3f5;
+  --surface-hover: #f6f7f9;
+  --line: #e3e6ea;
+  --line-soft: #eef0f3;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --ink: #16181d;
+  --ink-soft: #3d424b;
+  --muted: #6b7280;
+  --faint: #9aa1ab;
+
+  /* The sidebar is dark in both themes: it is the frame, not the page. */
+  --shell: #14161a;
+  --shell-line: #24272e;
+  --shell-active: #24272e;
+  --shell-ink: #f7f8f9;
+  --shell-muted: #9aa1ab;
+  --shell-faint: #5b616b;
+
+  --accent: #2563eb;
+  --accent-soft: #eff4ff;
+  --accent-ink: #ffffff;
+
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --success: #15803d;
+  --success-soft: #ecfdf5;
+  --warn: #a16207;
+  --warn-soft: #fef7e6;
+
+  --shadow-card: 0 1px 2px rgb(16 18 22 / 0.06), 0 1px 1px rgb(16 18 22 / 0.04);
+  --shadow-pop: 0 8px 24px rgb(16 18 22 / 0.12), 0 2px 6px rgb(16 18 22 / 0.08);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --canvas: #0c0d10;
+    --surface: #15171b;
+    --surface-sunk: #1b1e23;
+    --surface-hover: #1b1e23;
+    --line: #262a31;
+    --line-soft: #1f2229;
+
+    --ink: #f2f4f6;
+    --ink-soft: #c9ced6;
+    --muted: #99a0aa;
+    --faint: #6d747e;
+
+    --shell: #0a0b0d;
+    --shell-line: #22252b;
+    --shell-active: #22252b;
+    --shell-ink: #f2f4f6;
+    --shell-muted: #99a0aa;
+    --shell-faint: #5b616b;
+
+    --accent: #60a5fa;
+    --accent-soft: #152034;
+    --accent-ink: #0a0b0d;
+
+    --danger: #f87171;
+    --danger-soft: #2a1416;
+    --success: #4ade80;
+    --success-soft: #10231a;
+    --warn: #fbbf24;
+    --warn-soft: #2a2211;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.4);
   }
 }
 
+:root[data-theme="dark"] {
+  --canvas: #0c0d10;
+  --surface: #15171b;
+  --surface-sunk: #1b1e23;
+  --surface-hover: #1b1e23;
+  --line: #262a31;
+  --line-soft: #1f2229;
+
+  --ink: #f2f4f6;
+  --ink-soft: #c9ced6;
+  --muted: #99a0aa;
+  --faint: #6d747e;
+
+  --shell: #0a0b0d;
+  --shell-line: #22252b;
+  --shell-active: #22252b;
+  --shell-ink: #f2f4f6;
+  --shell-muted: #99a0aa;
+  --shell-faint: #5b616b;
+
+  --accent: #60a5fa;
+  --accent-soft: #152034;
+  --accent-ink: #0a0b0d;
+
+  --danger: #f87171;
+  --danger-soft: #2a1416;
+  --success: #4ade80;
+  --success-soft: #10231a;
+  --warn: #fbbf24;
+  --warn-soft: #2a2211;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.4);
+}
+
+/*
+ * `inline` so each utility emits the raw `var(--canvas)` rather than a
+ * reference to a copy of it. Without it the theme values are snapshotted at
+ * :root and neither the media query nor the data-theme block above reaches
+ * them.
+ */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-sunk: var(--surface-sunk);
+  --color-surface-hover: var(--surface-hover);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+
+  --color-shell: var(--shell);
+  --color-shell-line: var(--shell-line);
+  --color-shell-active: var(--shell-active);
+  --color-shell-ink: var(--shell-ink);
+  --color-shell-muted: var(--shell-muted);
+  --color-shell-faint: var(--shell-faint);
+
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+
+  /*
+   * Dragging a catalogue row (price-book/item-dnd.tsx). The card lifts and
+   * tilts a hair as it leaves the table; the row that lands holds the accent
+   * tint for a beat, then lets it go. Both run under motion-safe only.
+   */
+  --animate-ghost-lift: ghost-lift 180ms cubic-bezier(0.2, 0, 0, 1) both;
+  --animate-row-arrive: row-arrive 1.6s cubic-bezier(0.2, 0, 0, 1);
+
+  @keyframes ghost-lift {
+    from {
+      transform: scale(1) rotate(0deg);
+    }
+    to {
+      transform: scale(1.02) rotate(0.6deg);
+    }
+  }
+
+  @keyframes row-arrive {
+    0%,
+    35% {
+      background-color: var(--accent-soft);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /*
+   * A six-step type scale, replacing the twelve arbitrary pixel values this
+   * screen had grown. Nothing outside this list is a legal text size: that
+   * is what makes a dense interface read as ordered rather than as noise.
+   */
+  --text-2xs: 0.6875rem;      /* 11px - table headers, chips, meta */
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;         /* 12px - secondary text, controls */
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.8125rem;       /* 13px - table body, the default */
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;      /* 14px - form fields, prose */
+  --text-base--line-height: 1.375rem;
+  --text-lg: 0.9375rem;       /* 15px - page title */
+  --text-lg--line-height: 1.375rem;
+  --text-xl: 1.125rem;        /* 18px - the sign-in screen only */
+  --text-xl--line-height: 1.5rem;
+}
+
+html {
+  /* The sidebar is dark in both themes, so form controls inside it need to
+     be told which scheme they are painting into whatever the page says. */
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    color-scheme: dark;
+  }
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+/*
+ * Money and quantities are read down a column, so they are set in the mono
+ * face with tabular figures: the digits line up and a price that is an order
+ * of magnitude out is visible without reading it.
+ */
+.num {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "zero" 1;
+  letter-spacing: -0.01em;
+}
+
+/*
+ * While a catalogue row is being dragged the pointer is a closed hand and
+ * nothing it passes over gets selected. Set on the root and inherited, not
+ * with a universal selector: flipping the attribute would otherwise restyle
+ * every element of a thousand-row table at the moment of pick-up.
+ */
+html[data-dragging] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/*
+ * ...and the table stops answering to the pointer. Every row the card passes
+ * over would otherwise take and lose :hover, and each of those changes
+ * restyled the whole table: measured on a 1000-row book, ten pointer moves
+ * cost 3-5 s of style recalculation with hover live and 0.6 s without. The
+ * drop target is found from coordinates, not from what is under the pointer,
+ * and a row lighting up under a card that is not going there is wrong anyway.
+ */
+html[data-dragging] table {
+  pointer-events: none;
+}
+
+/*
+ * Toast colours, fed from the same tokens as everything else so they follow
+ * the theme instead of carrying their own palette. sonner reads these
+ * variables when the Toaster is rendered with `richColors`.
+ */
+[data-sonner-toaster] {
+  --normal-bg: var(--surface);
+  --normal-text: var(--ink);
+  --normal-border: var(--line);
+
+  --success-bg: var(--success-soft);
+  --success-text: var(--success);
+  --success-border: color-mix(in oklab, var(--success) 35%, transparent);
+
+  --error-bg: var(--danger-soft);
+  --error-text: var(--danger);
+  --error-border: color-mix(in oklab, var(--danger) 35%, transparent);
+
+  --warning-bg: var(--warn-soft);
+  --warning-text: var(--warn);
+  --warning-border: color-mix(in oklab, var(--warn) 35%, transparent);
+
+  --info-bg: var(--accent-soft);
+  --info-text: var(--accent);
+  --info-border: color-mix(in oklab, var(--accent) 35%, transparent);
+
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }

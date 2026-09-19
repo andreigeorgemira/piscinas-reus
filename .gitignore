@@ -69,3 +69,7 @@ docs/*
 .agents/
 .claude/
 skills-lock.json
+
+# Design mockups. The .dc.html artboards behind the admin design live on disk
+# and in the published canvas, not in the repo - same reasoning as docs/ above.
+.design/

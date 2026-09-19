@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { listPriceBook, UNGROUPED_NAME } from '@/lib/price-book/queries'
+import { listPriceBook, UNGROUPED_FILTER, UNGROUPED_NAME } from '@/lib/price-book/queries'
 import { adminDb, createUser, makeAdmin, resetDatabase, uniqueEmail } from './helpers/db'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 let staff: SupabaseClient
 let customer: SupabaseClient
 let groupId: string
+let bookId: string
 
 beforeAll(async () => {
   await resetDatabase()
@@ -21,17 +22,28 @@ beforeAll(async () => {
   const buyer = await createUser(uniqueEmail('customer'))
   customer = buyer.db
 
+  // Every group and concept belongs to a book (0012_price_books.sql). The
+  // seed leaves exactly one behind; these fixtures join it rather than
+  // creating a second, so what they assert is what one book holds.
+  const { data: book } = await db
+    .from('price_books')
+    .select('id')
+    .order('position')
+    .limit(1)
+    .single()
+  bookId = book!.id
+
   // Inserted out of position order, so a passing test proves the query
   // sorts rather than merely echoing insertion order.
   const { data: revestimientos } = await db
     .from('price_book_groups')
-    .insert({ name: 'Revestimientos', position: 2 })
+    .insert({ price_book_id: bookId, name: 'Revestimientos', position: 2 })
     .select()
     .single()
 
   const { data: albanileria } = await db
     .from('price_book_groups')
-    .insert({ name: 'Albanileria', position: 1 })
+    .insert({ price_book_id: bookId, name: 'Albanileria', position: 1 })
     .select()
     .single()
   groupId = albanileria!.id
@@ -42,6 +54,7 @@ beforeAll(async () => {
   // default. `is_active` is spelled out on every row for that reason.
   await db.from('price_book_items').insert([
     {
+      price_book_id: bookId,
       group_id: groupId,
       code: 'ALB-002',
       name: 'Ladrillo',
@@ -51,6 +64,7 @@ beforeAll(async () => {
       is_active: true,
     },
     {
+      price_book_id: bookId,
       // Retired, but still expected back: this screen exists to bring
       // retired items back, hiding them is the quote editor's job.
       group_id: groupId,
@@ -62,6 +76,7 @@ beforeAll(async () => {
       is_active: false,
     },
     {
+      price_book_id: bookId,
       group_id: revestimientos!.id,
       code: null,
       name: 'Gresite',
@@ -71,6 +86,7 @@ beforeAll(async () => {
       is_active: true,
     },
     {
+      price_book_id: bookId,
       group_id: null,
       code: null,
       name: 'Suelto',
@@ -86,7 +102,7 @@ afterAll(resetDatabase)
 
 describe('listPriceBook', () => {
   it('orders groups by position with the ungrouped bucket last', async () => {
-    const { groups } = await listPriceBook(staff)
+    const { groups } = await listPriceBook(staff, { priceBookId: bookId })
     expect(groups.map((g) => g.name)).toEqual([
       'Albanileria',
       'Revestimientos',
@@ -95,34 +111,34 @@ describe('listPriceBook', () => {
   })
 
   it('nests items under their group, ordered by code', async () => {
-    const { groups } = await listPriceBook(staff)
+    const { groups } = await listPriceBook(staff, { priceBookId: bookId })
     const albanileria = groups.find((g) => g.name === 'Albanileria')!
     expect(albanileria.items.map((i) => i.code)).toEqual(['ALB-001', 'ALB-002'])
   })
 
   it('serialises prices as numbers, not strings', async () => {
-    const { groups } = await listPriceBook(staff)
+    const { groups } = await listPriceBook(staff, { priceBookId: bookId })
     const item = groups.flatMap((g) => g.items)[0]!
     expect(typeof item.unitCost).toBe('number')
     expect(typeof item.unitPrice).toBe('number')
   })
 
   it('still returns a retired item', async () => {
-    const { groups } = await listPriceBook(staff)
+    const { groups } = await listPriceBook(staff, { priceBookId: bookId })
     const albanileria = groups.find((g) => g.name === 'Albanileria')!
     const retired = albanileria.items.find((i) => i.code === 'ALB-001')
     expect(retired?.isActive).toBe(false)
   })
 
   it('gives the synthetic ungrouped bucket a null id', async () => {
-    const { groups } = await listPriceBook(staff)
+    const { groups } = await listPriceBook(staff, { priceBookId: bookId })
     const ungrouped = groups.find((g) => g.name === UNGROUPED_NAME)!
     expect(ungrouped.id).toBeNull()
     expect(ungrouped.items.map((i) => i.name)).toEqual(['Suelto'])
   })
 
   it('returns nothing for a customer, since RLS matches no rows', async () => {
-    const { groups } = await listPriceBook(customer)
+    const { groups } = await listPriceBook(customer, { priceBookId: bookId })
     expect(groups).toEqual([])
   })
 })
@@ -145,7 +161,7 @@ describe('listPriceBook ungrouped bucket', () => {
     await db.from('price_book_items').update({ group_id: groupId }).is('group_id', null)
 
     try {
-      const { groups } = await listPriceBook(staff)
+      const { groups } = await listPriceBook(staff, { priceBookId: bookId })
       expect(groups.map((g) => g.name)).not.toContain(UNGROUPED_NAME)
     } finally {
       for (const row of ungroupedRows ?? []) {
@@ -155,15 +171,17 @@ describe('listPriceBook ungrouped bucket', () => {
   })
 })
 
-describe('listPriceBook row cap', () => {
-  it('reports the total when the server truncates the item query', async () => {
-    // PostgREST returns at most max_rows rows (1000, supabase/config.toml)
-    // and neither query in listPriceBook paginates, so past that point the
-    // screen shows a slice. The counts are the only thing that says so --
-    // drop `count: 'exact'` and this is the test that notices.
+describe('listPriceBook paging', () => {
+  it('returns one page at a time and counts the whole catalogue', async () => {
+    // PostgREST returns at most max_rows rows (1000, supabase/config.toml).
+    // The query asks for a page, so the cap is never what decides how much
+    // comes back -- but the exact count still has to describe the whole
+    // catalogue, because that is what the pager is built from. Drop
+    // `count: 'exact'` and this is the test that notices.
     const db = adminDb()
     const marker = 'Cap fixture'
     const bulk = Array.from({ length: 1001 }, (_, index) => ({
+      price_book_id: bookId,
       group_id: groupId,
       code: `CAP-${String(index).padStart(4, '0')}`,
       name: `${marker} ${index}`,
@@ -177,13 +195,17 @@ describe('listPriceBook row cap', () => {
     if (insertError) throw insertError
 
     try {
-      const listing = await listPriceBook(staff)
+      const listing = await listPriceBook(staff, { priceBookId: bookId, pageSize: 50 })
       expect(listing.itemsTotal).toBeGreaterThan(1000)
-      expect(listing.itemsShown).toBe(1000)
-      expect(listing.itemsShown).toBeLessThan(listing.itemsTotal)
-      // Groups are nowhere near the cap, so their two numbers must agree --
-      // otherwise a screen could claim a truncation that never happened.
-      expect(listing.groupsShown).toBe(listing.groupsTotal)
+      expect(listing.itemsShown).toBe(50)
+      expect(listing.pageCount).toBe(Math.ceil(listing.itemsTotal / 50))
+
+      const second = await listPriceBook(staff, { priceBookId: bookId, pageSize: 50, page: 2 })
+      const firstCodes = listing.groups.flatMap((g) => g.items.map((i) => i.code))
+      const secondCodes = second.groups.flatMap((g) => g.items.map((i) => i.code))
+      expect(secondCodes).toHaveLength(50)
+      // Ordered by code and sliced by range, so the two pages share nothing.
+      expect(secondCodes.some((code) => firstCodes.includes(code))).toBe(false)
     } finally {
       const { error: cleanupError } = await db
         .from('price_book_items')
@@ -193,10 +215,171 @@ describe('listPriceBook row cap', () => {
     }
   })
 
-  it('reports equal counts for a catalogue the server returns whole', async () => {
-    const listing = await listPriceBook(staff)
+  it('reports one page for a catalogue that fits on one', async () => {
+    const listing = await listPriceBook(staff, { priceBookId: bookId })
     expect(listing.itemsShown).toBe(listing.itemsTotal)
-    expect(listing.groupsShown).toBe(listing.groupsTotal)
+    expect(listing.pageCount).toBe(1)
+    expect(listing.page).toBe(1)
+  })
+
+  it('lists every group even when the page shows none of its items', async () => {
+    const listing = await listPriceBook(staff, { priceBookId: bookId, search: 'no-such-concept-anywhere' })
+    expect(listing.itemsTotal).toBe(0)
+    expect(listing.allGroups.map((g) => g.name)).toContain('Albanileria')
+  })
+})
+
+describe('listPriceBook filters', () => {
+  it('matches a search against the code', async () => {
+    const listing = await listPriceBook(staff, { priceBookId: bookId, search: 'ALB-001' })
+    const codes = listing.groups.flatMap((g) => g.items.map((i) => i.code))
+    expect(codes).toEqual(['ALB-001'])
+  })
+
+  it('matches a search against the name, case-insensitively', async () => {
+    const byName = await listPriceBook(staff, { priceBookId: bookId, search: 'suelto' })
+    const names = byName.groups.flatMap((g) => g.items.map((i) => i.name))
+    expect(names).toContain('Suelto')
+  })
+
+  it('survives a search term full of PostgREST filter syntax', async () => {
+    // An unquoted value would split this on the comma and send `y)` as a
+    // condition of its own, which comes back as a 400 rather than as no
+    // results. See quoteFilterValue in src/lib/price-book/queries.ts.
+    const listing = await listPriceBook(staff, { priceBookId: bookId, search: 'x,(y)"z' })
+    expect(listing.itemsTotal).toBe(0)
+  })
+
+  it('narrows to one group', async () => {
+    const listing = await listPriceBook(staff, { priceBookId: bookId, groupId })
+    const groupsWithItems = listing.groups.filter((g) => g.items.length > 0)
+    expect(groupsWithItems.map((g) => g.name)).toEqual(['Albanileria'])
+  })
+
+  it('narrows to the items filed under no group', async () => {
+    const listing = await listPriceBook(staff, { priceBookId: bookId, groupId: UNGROUPED_FILTER })
+    const items = listing.groups.flatMap((g) => g.items)
+    expect(items.map((i) => i.name)).toEqual(['Suelto'])
+  })
+})
+
+describe('price books', () => {
+  it('lets two books hold a group with the same name', async () => {
+    const db = adminDb()
+    const { data: second, error: bookError } = await db
+      .from('price_books')
+      .insert({ name: `Segundo ${Date.now()}`, position: 50 })
+      .select()
+      .single()
+    if (bookError) throw bookError
+
+    try {
+      // 'Albanileria' already exists in the seeded book. Uniqueness moved
+      // inside the book in 0012_price_books.sql, so this is not a clash.
+      const { error } = await db
+        .from('price_book_groups')
+        .insert({ price_book_id: second!.id, name: 'Albanileria', position: 1 })
+      expect(error).toBeNull()
+    } finally {
+      await db.from('price_books').delete().eq('id', second!.id)
+    }
+  })
+
+  it('lets two books hold a concept with the same code', async () => {
+    const db = adminDb()
+    const { data: second } = await db
+      .from('price_books')
+      .insert({ name: `Códigos ${Date.now()}`, position: 51 })
+      .select()
+      .single()
+
+    try {
+      const { error } = await db.from('price_book_items').insert({
+        price_book_id: second!.id,
+        code: 'ALB-002',
+        name: 'Ladrillo de otro tarifario',
+        unit: 'unit',
+        unit_cost: 1,
+        unit_price: 2,
+        is_active: true,
+      })
+      expect(error).toBeNull()
+    } finally {
+      await db.from('price_books').delete().eq('id', second!.id)
+    }
+  })
+
+  it('refuses a concept filed under a group from another book', async () => {
+    const db = adminDb()
+    const { data: second } = await db
+      .from('price_books')
+      .insert({ name: `Cruzado ${Date.now()}`, position: 52 })
+      .select()
+      .single()
+
+    try {
+      // The composite foreign key is the whole point: without it this rule
+      // would live in the application and hold only until the first direct
+      // API call ignored it.
+      const { error } = await db.from('price_book_items').insert({
+        price_book_id: second!.id,
+        group_id: groupId,
+        code: `CROSS-${Date.now()}`,
+        name: 'Concepto cruzado',
+        unit: 'unit',
+        unit_cost: 1,
+        unit_price: 2,
+        is_active: true,
+      })
+      expect(error?.code).toBe('23503')
+    } finally {
+      await db.from('price_books').delete().eq('id', second!.id)
+    }
+  })
+
+  it('takes its groups and concepts with it when deleted', async () => {
+    const db = adminDb()
+    const { data: doomed } = await db
+      .from('price_books')
+      .insert({ name: `Efímero ${Date.now()}`, position: 53 })
+      .select()
+      .single()
+
+    const { data: group } = await db
+      .from('price_book_groups')
+      .insert({ price_book_id: doomed!.id, name: 'Grupo efímero', position: 1 })
+      .select()
+      .single()
+
+    const { data: item } = await db
+      .from('price_book_items')
+      .insert({
+        price_book_id: doomed!.id,
+        group_id: group!.id,
+        code: `EPH-${Date.now()}`,
+        name: 'Concepto efímero',
+        unit: 'unit',
+        unit_cost: 1,
+        unit_price: 2,
+        is_active: true,
+      })
+      .select()
+      .single()
+
+    await db.from('price_books').delete().eq('id', doomed!.id)
+
+    const { data: groupAfter } = await db
+      .from('price_book_groups')
+      .select('id')
+      .eq('id', group!.id)
+    const { data: itemAfter } = await db.from('price_book_items').select('id').eq('id', item!.id)
+    expect(groupAfter).toEqual([])
+    expect(itemAfter).toEqual([])
+  })
+
+  it('hides every book from a customer', async () => {
+    const { data } = await customer.from('price_books').select('id')
+    expect(data).toEqual([])
   })
 })
 
@@ -211,7 +394,9 @@ describe('listPriceBook row cap', () => {
 // of a characterisation test, not a sign the schema is untested.
 describe('price book group and item writes', () => {
   it('lets staff create a group', async () => {
-    const { error } = await staff.from('price_book_groups').insert({ name: 'Vasos', position: 5 })
+    const { error } = await staff
+      .from('price_book_groups')
+      .insert({ price_book_id: bookId, name: 'Vasos', position: 5 })
     expect(error).toBeNull()
   })
 
@@ -219,13 +404,14 @@ describe('price book group and item writes', () => {
     // 'Albanileria' already exists from the module-scope fixture.
     const { error } = await staff
       .from('price_book_groups')
-      .insert({ name: 'Albanileria', position: 9 })
+      .insert({ price_book_id: bookId, name: 'Albanileria', position: 9 })
     expect(error?.code).toBe('23505')
   })
 
   it('rejects a duplicate item code with 23505', async () => {
     // 'ALB-002' already belongs to the fixture's 'Ladrillo' item.
     const { error } = await staff.from('price_book_items').insert({
+      price_book_id: bookId,
       group_id: groupId,
       code: 'ALB-002',
       name: 'Duplicado',
@@ -240,6 +426,7 @@ describe('price book group and item writes', () => {
   it('lets two items share a null code', async () => {
     const { error } = await staff.from('price_book_items').insert([
       {
+        price_book_id: bookId,
         group_id: groupId,
         code: null,
         name: 'Sin código A',
@@ -249,6 +436,7 @@ describe('price book group and item writes', () => {
         is_active: true,
       },
       {
+        price_book_id: bookId,
         group_id: groupId,
         code: null,
         name: 'Sin código B',
@@ -265,12 +453,13 @@ describe('price book group and item writes', () => {
     const db = adminDb()
     const { data: group } = await db
       .from('price_book_groups')
-      .insert({ name: 'Temporal', position: 50 })
+      .insert({ price_book_id: bookId, name: 'Temporal', position: 50 })
       .select()
       .single()
     const { data: item } = await db
       .from('price_book_items')
       .insert({
+        price_book_id: bookId,
         group_id: group!.id,
         code: 'TMP-001',
         name: 'Item temporal',
@@ -343,6 +532,7 @@ describe('deleting a price book item', () => {
     const { data: item, error: itemError } = await db
       .from('price_book_items')
       .insert({
+        price_book_id: bookId,
         code: 'PROV-001',
         name: 'Bomba de calor',
         unit: 'unit',
@@ -420,6 +610,7 @@ describe('deleting a price book item', () => {
     const { data: item, error: itemError } = await db
       .from('price_book_items')
       .insert({
+        price_book_id: bookId,
         code: 'PROV-002',
         name: 'Filtro de arena',
         unit: 'unit',

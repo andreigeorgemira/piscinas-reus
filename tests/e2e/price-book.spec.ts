@@ -16,7 +16,7 @@ const csvLabel = 'Pega aquí el CSV, o el bloque de celdas copiado desde Excel'
 test.beforeAll(async () => {
   const admin = adminDb()
 
-  // Sweeps the 1001-row fixture the truncation test at the end of this file
+  // Sweeps the 1001-row fixture the paging test near the end of this file
   // seeds, in case an earlier run never got to delete it. That test cleans
   // up in a `finally`, which Playwright does not guarantee runs when a test
   // hits its timeout -- and leaked 'Relleno ' rows sort ahead of every code
@@ -25,11 +25,35 @@ test.beforeAll(async () => {
   // file until someone runs `npx supabase db reset`. That reset is exactly
   // the prerequisite this file was changed to stop needing, so the cleanup
   // has to be unconditional rather than best-effort.
-  const { error: sweepError } = await admin
+  // Sweeps everything this file has ever created, not only the 1001-row
+  // fixture: the screen shows 25 concepts per page, so rows left behind by an
+  // earlier run push the row a test just created onto page two, where the
+  // test cannot see it. Every fixture name below is unique to this file --
+  // no seeded concept is called 'Concepto ...' and no seeded group 'Grupo
+  // ...' -- so this cannot touch the catalogue the other tests read.
+  //
+  // Items first: deleting a group only nulls its items' group_id (on delete
+  // set null), so sweeping groups first would leave the items behind in the
+  // ungrouped bucket, still taking up the page.
+  const { error: itemSweepError } = await admin
     .from('price_book_items')
     .delete()
-    .like('name', 'Relleno %')
-  if (sweepError) throw sweepError
+    .or(
+      [
+        'name.like.Relleno %',
+        'name.like.Concepto %',
+        'name.like.Codeless %',
+        'name.like.Nombre actualizado %',
+        'name.like.Arrastrado %',
+      ].join(','),
+    )
+  if (itemSweepError) throw itemSweepError
+
+  const { error: groupSweepError } = await admin
+    .from('price_book_groups')
+    .delete()
+    .like('name', 'Grupo %')
+  if (groupSweepError) throw groupSweepError
 
   const staff = await admin.auth.admin.createUser({
     email: staffEmail,
@@ -46,6 +70,72 @@ test.beforeAll(async () => {
   })
   if (client.error) throw client.error
 })
+
+/**
+ * Creating a group is a disclosure at the foot of the catalogue now: the
+ * button opens the field, the field takes the name, and the position fills
+ * itself in.
+ */
+async function createGroup(page: Page, name: string) {
+  await page.getByRole('button', { name: 'Nuevo grupo' }).click()
+  await page.getByLabel('Nombre del grupo').fill(name)
+  await page.getByRole('button', { name: 'Crear grupo' }).click()
+  await dismissToast(page, 'Grupo creado')
+}
+
+/**
+ * Waits for a toast to appear, then for it to leave.
+ *
+ * Toasts stack at the bottom right, over the table's last column -- where
+ * every row keeps its buttons. A test that clicks one of those buttons, then
+ * fills fields, never moves the mouse: the toast that appears under the
+ * pointer counts as hovered, sonner pauses its timer, and every retry of the
+ * next click hovers it again. It never leaves, and the click times out
+ * (CI on PR #5). A person reaches for the next field and the toast goes on
+ * its own; here the mouse is moved away on purpose.
+ *
+ * Waiting for the named toast first matters: checking for "no toasts" before
+ * the server has answered passes at once, and the toast lands afterwards.
+ */
+async function dismissToast(page: Page, text: string) {
+  await expect(page.locator('[data-sonner-toast]').filter({ hasText: text })).toBeVisible()
+  await page.mouse.move(0, 0)
+  await expect(page.locator('[data-sonner-toast]')).toHaveCount(0, { timeout: 10_000 })
+}
+
+/**
+ * Opens the catalogue seeded by supabase/seed.sql. The screens moved under
+ * /admin/price-books/<id> when a business stopped having exactly one
+ * catalogue (0012_price_books.sql), and the id is generated, so the way in
+ * is the list.
+ */
+/**
+ * The book every fixture in this file writes into: the one the seed leaves
+ * behind. Groups and concepts have belonged to a book since
+ * 0012_price_books.sql, and the column is not nullable.
+ */
+async function seededBookId(): Promise<string> {
+  const { data, error } = await adminDb()
+    .from('price_books')
+    .select('id')
+    .order('position')
+    .limit(1)
+    .single()
+  if (error) throw error
+  return data.id
+}
+
+async function gotoPriceBook(page: Page): Promise<string> {
+  await page.goto('/admin/price-books')
+  await page.getByRole('link', { name: 'Tarifario general' }).click()
+  // Longer than the default 5 s: the address changes only once the book has
+  // rendered, and the big-catalogue test below opens a book of 1000+ rows.
+  // On the dev server that takes 3.5-4.5 s with the machine idle, measured
+  // the same before and after the drag rewrite, so any load at all pushed
+  // the default over.
+  await expect(page).toHaveURL(/\/admin\/price-books\/[0-9a-f-]+/, { timeout: 15_000 })
+  return new URL(page.url()).pathname
+}
 
 async function loginAsStaff(page: Page) {
   await page.goto('/login')
@@ -66,25 +156,24 @@ async function loginAsClient(page: Page) {
 test('redirects a client away from the price book', async ({ page }) => {
   await loginAsClient(page)
 
-  await page.goto('/admin/price-book')
+  await page.goto('/admin/price-books')
   await expect(page).toHaveURL(/\/portal/)
   await expect(page.getByRole('heading', { name: 'Tarifario' })).toBeHidden()
 })
 
 test('creates a group, adds a concept and edits its price inline', async ({ page }) => {
   await loginAsStaff(page)
-  await page.goto('/admin/price-book')
+  await gotoPriceBook(page)
 
   const groupName = `Grupo E2E ${runId}`
   const itemName = `Concepto E2E ${runId}`
   const itemCode = `E2E-${runId}`
 
-  await page.getByLabel('Nuevo grupo').fill(groupName)
-  await page.getByRole('button', { name: 'Crear grupo' }).click()
+  await createGroup(page, groupName)
 
   // The section is a named region only once React has mounted it with its
   // heading, which is exactly what makes it addressable without a CSS class.
-  const region = page.getByRole('region', { name: groupName })
+  const region = page.getByRole('rowgroup', { name: groupName })
   await expect(region).toBeVisible()
 
   await region.getByRole('button', { name: `Añadir concepto a ${groupName}` }).click()
@@ -95,12 +184,13 @@ test('creates a group, adds a concept and edits its price inline', async ({ page
   await region.getByRole('button', { name: 'Añadir', exact: true }).click()
 
   await expect(region.getByRole('button', { name: `Editar ${itemName}` })).toBeVisible()
+  await dismissToast(page, 'Concepto añadido')
 
   // A successful add reopens the form blank, ready for the next concept --
   // closing it again leaves exactly one set of Código/Concepto/Coste/Precio
   // fields in this region, which is what lets the edit row below be found
   // by accessible name alone instead of by DOM position.
-  await region.getByRole('button', { name: `Añadir concepto a ${groupName}` }).click()
+  await region.getByRole('button', { name: 'Cancelar' }).click()
 
   await region.getByRole('button', { name: `Editar ${itemName}` }).click()
   // A dot, not a comma: both spellings must save as the same two-decimal
@@ -109,22 +199,170 @@ test('creates a group, adds a concept and edits its price inline', async ({ page
   await region.getByRole('button', { name: 'Guardar' }).click()
 
   await expect(region.getByRole('button', { name: `Editar ${itemName}` })).toBeVisible()
-  await expect(region.getByRole('cell', { name: '22,50', exact: true })).toBeVisible()
+  // The price column carries its unit now, so the cell reads '22,50 €'.
+  await expect(region.getByRole('cell', { name: /^22,50/ })).toBeVisible()
+})
+
+test('drags a concept into another group and it stays there', async ({ page }) => {
+  const bookId = await seededBookId()
+  // Named 'Grupo …' so the sweep in beforeAll clears them on the next run.
+  const fromName = `Grupo Origen ${runId}`
+  const toName = `Grupo Destino ${runId}`
+  const itemName = `Arrastrado ${runId}`
+
+  const db = adminDb()
+  const { data: groups, error: groupError } = await db
+    .from('price_book_groups')
+    .insert([
+      { price_book_id: bookId, name: fromName, position: 900 },
+      { price_book_id: bookId, name: toName, position: 901 },
+    ])
+    .select('id, name')
+  if (groupError) throw groupError
+  const fromId = groups.find((group) => group.name === fromName)!.id
+  const toId = groups.find((group) => group.name === toName)!.id
+
+  const { data: item, error: itemError } = await db
+    .from('price_book_items')
+    .insert({
+      price_book_id: bookId,
+      group_id: fromId,
+      name: itemName,
+      unit: 'unit',
+      unit_cost: 1,
+      unit_price: 2,
+    })
+    .select('id')
+    .single()
+  if (itemError) throw itemError
+
+  await loginAsStaff(page)
+  await gotoPriceBook(page)
+
+  const source = page.getByRole('rowgroup', { name: fromName })
+  const destination = page.getByRole('rowgroup', { name: toName })
+  // Centred in the table's own scroll area, clear of the edges where holding
+  // a row starts scrolling the table under it.
+  await destination.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+
+  const handle = source.getByRole('button', { name: `Mover ${itemName} de grupo` })
+  const from = (await handle.boundingBox())!
+  const heading = (await destination.locator('th').first().boundingBox())!
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  // Past the few pixels a press needs before it counts as a drag, then over
+  // the other group in steps, the way a hand moves.
+  await page.mouse.move(from.x + from.width / 2 + 8, from.y + from.height / 2 + 8, { steps: 4 })
+  await page.mouse.move(heading.x + 120, heading.y + heading.height / 2, { steps: 12 })
+
+  // The card under the pointer names the destination before the drop.
+  await expect(page.getByText(`Mover a ${toName}`)).toBeVisible()
+  await page.mouse.up()
+
+  await expect(destination.getByRole('button', { name: `Mover ${itemName} de grupo` })).toBeVisible()
+  await expect(source.getByRole('button', { name: `Mover ${itemName} de grupo` })).toHaveCount(0)
+
+  // Not only on screen: the write reached the database, and a reload agrees.
+  await expect
+    .poll(async () => {
+      const { data, error } = await db
+        .from('price_book_items')
+        .select('group_id')
+        .eq('id', item.id)
+        .single()
+      if (error) throw error
+      return data.group_id
+    })
+    .toBe(toId)
+
+  await page.reload()
+  await expect(
+    page
+      .getByRole('rowgroup', { name: toName })
+      .getByRole('button', { name: `Mover ${itemName} de grupo` }),
+  ).toBeVisible()
+})
+
+test('offers the destination code after a move, and applies it only when asked', async ({
+  page,
+}) => {
+  const bookId = await seededBookId()
+  const fromName = `Grupo Viejo ${runId}`
+  const toName = `Grupo Nuevo ${runId}`
+  const itemName = `Concepto Renumerado ${runId}`
+  // Prefixes of this run's own, so the next free number is known whatever
+  // else the book holds.
+  const tag = runId.replace(/[^a-z0-9]/gi, '').toUpperCase()
+  const oldCode = `V${tag}-001`
+  const newCode = `N${tag}-003`
+
+  const db = adminDb()
+  const { data: groups, error: groupError } = await db
+    .from('price_book_groups')
+    .insert([
+      { price_book_id: bookId, name: fromName, position: 910 },
+      { price_book_id: bookId, name: toName, position: 911 },
+    ])
+    .select('id, name')
+  if (groupError) throw groupError
+  const fromId = groups.find((group) => group.name === fromName)!.id
+  const toId = groups.find((group) => group.name === toName)!.id
+
+  const row = { price_book_id: bookId, unit: 'unit', unit_cost: 1, unit_price: 2 } as const
+  const { data: item, error: itemError } = await db
+    .from('price_book_items')
+    .insert([
+      { ...row, group_id: fromId, code: oldCode, name: itemName },
+      // The neighbours the destination's convention is learnt from.
+      { ...row, group_id: toId, code: `N${tag}-001`, name: `Concepto Vecino A ${runId}` },
+      { ...row, group_id: toId, code: `N${tag}-002`, name: `Concepto Vecino B ${runId}` },
+    ])
+    .select('id, name')
+  if (itemError) throw itemError
+  const itemId = item.find((row) => row.name === itemName)!.id
+
+  const codeInDb = async () => {
+    const { data, error } = await db.from('price_book_items').select('code').eq('id', itemId).single()
+    if (error) throw error
+    return data.code
+  }
+
+  await loginAsStaff(page)
+  await gotoPriceBook(page)
+
+  const source = page.getByRole('rowgroup', { name: fromName })
+  await source.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+  await source.getByRole('button', { name: `Mover ${itemName} de grupo` }).click()
+  await page.getByRole('dialog').getByRole('button', { name: toName }).click()
+
+  // The move is made and the new code is shown -- but not applied.
+  await expect(page.getByText(`Código: ${oldCode} → ${newCode}`)).toBeVisible()
+  await expect.poll(async () => {
+    const { data } = await db.from('price_book_items').select('group_id').eq('id', itemId).single()
+    return data?.group_id
+  }).toBe(toId)
+  expect(await codeInDb()).toBe(oldCode)
+
+  await page.getByRole('button', { name: 'Cambiar código' }).click()
+  await expect.poll(codeInDb).toBe(newCode)
+
+  await page.reload()
+  await expect(page.getByRole('rowgroup', { name: toName }).getByText(newCode)).toBeVisible()
 })
 
 test('reports a duplicate code in Spanish instead of crashing', async ({ page }) => {
   await loginAsStaff(page)
-  await page.goto('/admin/price-book')
+  await gotoPriceBook(page)
 
   const groupName = `Grupo Duplicado ${runId}`
   const code = `DUP-${runId}`
   const firstName = `Primero ${runId}`
   const secondName = `Segundo ${runId}`
 
-  await page.getByLabel('Nuevo grupo').fill(groupName)
-  await page.getByRole('button', { name: 'Crear grupo' }).click()
+  await createGroup(page, groupName)
 
-  const region = page.getByRole('region', { name: groupName })
+  const region = page.getByRole('rowgroup', { name: groupName })
   await region.getByRole('button', { name: `Añadir concepto a ${groupName}` }).click()
   await region.getByLabel('Código', { exact: true }).fill(code)
   await region.getByLabel('Concepto', { exact: true }).fill(firstName)
@@ -132,6 +370,7 @@ test('reports a duplicate code in Spanish instead of crashing', async ({ page })
   await region.getByLabel('Precio', { exact: true }).fill('9,00')
   await region.getByRole('button', { name: 'Añadir', exact: true }).click()
   await expect(region.getByRole('button', { name: `Editar ${firstName}` })).toBeVisible()
+  await dismissToast(page, 'Concepto añadido')
 
   // The add row is blank again, ready for the second (colliding) concept.
   await region.getByLabel('Código', { exact: true }).fill(code)
@@ -169,14 +408,17 @@ test('retires and reactivates a concept', async ({ page }) => {
   const groupName = `Grupo Retirada ${runId}`
   const itemName = `Concepto Retirada ${runId}`
 
+  const bookId = await seededBookId()
+
   const { data: group, error: groupError } = await admin
     .from('price_book_groups')
-    .insert({ name: groupName })
+    .insert({ price_book_id: bookId, name: groupName })
     .select('id')
     .single()
   if (groupError) throw groupError
 
   const { error: itemError } = await admin.from('price_book_items').insert({
+    price_book_id: bookId,
     group_id: group!.id,
     code: `RET-${runId}`,
     name: itemName,
@@ -188,9 +430,9 @@ test('retires and reactivates a concept', async ({ page }) => {
   if (itemError) throw itemError
 
   await loginAsStaff(page)
-  await page.goto('/admin/price-book')
+  await gotoPriceBook(page)
 
-  const region = page.getByRole('region', { name: groupName })
+  const region = page.getByRole('rowgroup', { name: groupName })
   // A live filter, not a snapshot: it is re-evaluated on every assertion
   // below, so it keeps matching the same row across the Sí/No flip that
   // Retirar/Reactivar causes.
@@ -201,6 +443,7 @@ test('retires and reactivates a concept', async ({ page }) => {
 
   await expect(row.getByRole('button', { name: `Reactivar ${itemName}` })).toBeVisible()
   await expect(row.getByText('No', { exact: true })).toBeVisible()
+  await dismissToast(page, 'Concepto retirado del catálogo')
 
   await row.getByRole('button', { name: `Reactivar ${itemName}` }).click()
 
@@ -215,7 +458,9 @@ test('refuses the import screen and its writes to a non-admin', async ({ page })
 
   await loginAsClient(page)
 
-  await page.goto('/admin/price-book/import')
+  // A book id this client could never have read: requireAdmin turns them
+  // away before the screen ever looks one up, which is the point.
+  await page.goto('/admin/price-books/00000000-0000-0000-0000-000000000000/import')
   await expect(page).toHaveURL(/\/portal/)
   await expect(page.getByLabel(csvLabel)).toHaveCount(0)
 
@@ -234,10 +479,20 @@ test('refuses the import screen and its writes to a non-admin', async ({ page })
   const signIn = await clientDb.auth.signInWithPassword({ email: clientEmail, password })
   if (signIn.error) throw signIn.error
 
-  const groupWrite = await clientDb.from('price_book_groups').insert({ name: groupName })
+  const { data: book } = await admin
+    .from('price_books')
+    .select('id')
+    .order('position')
+    .limit(1)
+    .single()
+
+  const groupWrite = await clientDb
+    .from('price_book_groups')
+    .insert({ price_book_id: book!.id, name: groupName })
   expect(groupWrite.error?.code).toBe('42501')
 
   const itemWrite = await clientDb.from('price_book_items').insert({
+    price_book_id: book!.id,
     code: `PROH-${runId}`,
     name: itemName,
     unit: 'hour',
@@ -266,7 +521,8 @@ test('refuses the import screen and its writes to a non-admin', async ({ page })
 
 test('imports a CSV that creates its own group and price', async ({ page }) => {
   await loginAsStaff(page)
-  await page.goto('/admin/price-book/import')
+  const bookPath = await gotoPriceBook(page)
+  await page.goto(`${bookPath}/import`)
 
   const groupName = `Grupo Importado ${runId}`
   const itemName = `Concepto Importado ${runId}`
@@ -285,15 +541,22 @@ test('imports a CSV that creates its own group and price', async ({ page }) => {
   ).toBeVisible()
 
   await page.getByRole('link', { name: 'Ver el tarifario' }).click()
-  await expect(page).toHaveURL(/\/admin\/price-book$/)
+  await expect(page).toHaveURL(/\/admin\/price-books\/[0-9a-f-]+$/)
 
-  const region = page.getByRole('region', { name: groupName })
-  await expect(region.getByRole('cell', { name: '18,00', exact: true })).toBeVisible()
+  // Searched rather than read off the first page: the catalogue holds more
+  // than one page of concepts by the time this test runs, and where the
+  // imported row landed is not what this test is about.
+  await page.getByRole('searchbox', { name: 'Buscar en el tarifario' }).fill(itemName)
+  await page.getByRole('searchbox', { name: 'Buscar en el tarifario' }).press('Enter')
+
+  const region = page.getByRole('rowgroup', { name: groupName })
+  await expect(region.getByRole('cell', { name: /^18,00/ })).toBeVisible()
 })
 
 test('reports a bad price by line number and hides the import button', async ({ page }) => {
   await loginAsStaff(page)
-  await page.goto('/admin/price-book/import')
+  const bookPath = await gotoPriceBook(page)
+  await page.goto(`${bookPath}/import`)
 
   const csv = `concepto;unidad;coste;precio\nItem malo ${runId};hora;abc;30,00`
   await page.getByLabel(csvLabel).fill(csv)
@@ -319,6 +582,7 @@ test('re-importing the same file keeps the coded row, duplicates the codeless on
   const { data: seeded, error: seedError } = await admin
     .from('price_book_items')
     .insert({
+      price_book_id: await seededBookId(),
       code,
       name: `Nombre original ${runId}`,
       description,
@@ -342,7 +606,8 @@ test('re-importing the same file keeps the coded row, duplicates the codeless on
     `${codelessName};hora;5,00;8,00;${groupName};`
 
   await loginAsStaff(page)
-  await page.goto('/admin/price-book/import')
+  const bookPath = await gotoPriceBook(page)
+  await page.goto(`${bookPath}/import`)
   const textarea = page.getByLabel(csvLabel)
 
   await textarea.fill(csv)
@@ -378,7 +643,7 @@ test('re-importing the same file keeps the coded row, duplicates the codeless on
   expect(codelessAfterFirst).toHaveLength(1)
 
   // Re-run the exact same file.
-  await page.goto('/admin/price-book/import')
+  await page.goto(`${bookPath}/import`)
   await textarea.fill(csv)
   await page.getByRole('button', { name: 'Comprobar', exact: true }).click()
   await page.getByRole('button', { name: 'Importar 2 conceptos', exact: true }).click()
@@ -412,7 +677,8 @@ test('commits what the preview showed, not what the textarea holds when Importar
   page,
 }) => {
   await loginAsStaff(page)
-  await page.goto('/admin/price-book/import')
+  const bookPath = await gotoPriceBook(page)
+  await page.goto(`${bookPath}/import`)
 
   const previewedName = `Concepto Previsto ${runId}`
   const editedName = `Concepto Alterado ${runId}`
@@ -450,22 +716,24 @@ test('commits what the preview showed, not what the textarea holds when Importar
   expect(edited).toHaveLength(0)
 })
 
-test('says on screen that the catalogue is truncated, instead of stopping silently', async ({
-  page,
-}) => {
-  // The one screen-level proof that a capped read is visible rather than
-  // silent: PostgREST returns at most max_rows rows (1000,
-  // supabase/config.toml) and listPriceBook does not paginate.
+test('pages a search through a catalogue too big for one screen', async ({ page }) => {
+  // Two things at once, because they share an expensive fixture: that a
+  // search pages, and that an unfiltered screen which cannot show everything
+  // says so. PostgREST returns at most max_rows rows (1000,
+  // supabase/config.toml), and the grouped view asks for the whole book on
+  // purpose -- a group split across pages is a group you cannot read.
   //
   // Seeded and torn down inside this test. 1001 extra concepts push every
-  // other row this file creates out of the first 1000 the server returns, so
-  // leaving them behind would break the tests around it. That is safe here
-  // because tests in one file run serially (fullyParallel: false in
+  // other row this file creates off the first page of any search, so leaving
+  // them behind would break the tests around it. That is safe here because
+  // tests in one file run serially (fullyParallel: false in
   // playwright.config.ts) and auth.spec.ts -- the only file that can run
   // alongside this one -- never opens this screen.
   const admin = adminDb()
   const marker = `Relleno ${runId}`
+  const bookId = await seededBookId()
   const bulk = Array.from({ length: 1001 }, (_, index) => ({
+    price_book_id: bookId,
     code: `FILL-${runId}-${String(index).padStart(4, '0')}`,
     name: `${marker} ${index}`,
     unit: 'unit' as const,
@@ -479,10 +747,28 @@ test('says on screen that the catalogue is truncated, instead of stopping silent
 
   try {
     await loginAsStaff(page)
-    await page.goto('/admin/price-book')
-    await expect(
-      page.getByText(/Esta pantalla muestra 1000 de \d+ conceptos/),
-    ).toBeVisible()
+    const bookPath = await gotoPriceBook(page)
+
+    // Unfiltered: the whole book on one screen, and an honest line when the
+    // server could not hand over all of it.
+    await expect(page.getByText(/muestra los 1000 primeros/)).toBeVisible()
+
+    // Searching pages, because a result set has no groups to keep whole.
+    await page.goto(`${bookPath}?q=FILL-${runId}`)
+    const pager = page.getByRole('navigation', { name: 'Páginas de conceptos' })
+    await expect(pager.getByText(/Mostrando 25 de \d+ conceptos/)).toBeVisible()
+    await expect(pager.getByText('1 /')).toBeVisible()
+
+    const firstCode = `FILL-${runId}-0000`
+    await expect(page.getByRole('cell', { name: firstCode, exact: true })).toBeVisible()
+
+    await pager.getByRole('link', { name: 'Página siguiente' }).click()
+
+    // A different page, not the same one re-rendered: page two starts where
+    // page one stopped, and the row that opened page one is gone from it.
+    await expect(pager.getByText('2 /')).toBeVisible()
+    await expect(page.getByRole('cell', { name: firstCode, exact: true })).toHaveCount(0)
+    await expect(page.getByRole('cell', { name: `FILL-${runId}-0025`, exact: true })).toBeVisible()
   } finally {
     const { error: cleanupError } = await admin
       .from('price_book_items')
@@ -490,4 +776,39 @@ test('says on screen that the catalogue is truncated, instead of stopping silent
       .like('name', `${marker} %`)
     if (cleanupError) throw cleanupError
   }
+})
+
+test('finds a concept by code and keeps the search in the address', async ({ page }) => {
+  const groupName = `Grupo Buscado ${runId}`
+  const code = `SEA-${runId}`
+  const itemName = `Concepto buscado ${runId}`
+
+  await loginAsStaff(page)
+  await gotoPriceBook(page)
+
+  await createGroup(page, groupName)
+
+  const region = page.getByRole('rowgroup', { name: groupName })
+  await region.getByRole('button', { name: `Añadir concepto a ${groupName}` }).click()
+  await region.getByLabel('Código', { exact: true }).fill(code)
+  await region.getByLabel('Concepto', { exact: true }).fill(itemName)
+  await region.getByLabel('Coste', { exact: true }).fill('7,00')
+  await region.getByLabel('Precio', { exact: true }).fill('14,00')
+  await region.getByRole('button', { name: 'Añadir', exact: true }).click()
+  // Waits on the toast, not on the new row: by the time this test runs the
+  // catalogue has grown past one page, so the row it just created may be on
+  // page two -- which is exactly what the search below is for.
+  await expect(page.getByText('Concepto añadido')).toBeVisible()
+
+  await page.getByRole('searchbox', { name: 'Buscar en el tarifario' }).fill(code)
+  await page.getByRole('searchbox', { name: 'Buscar en el tarifario' }).press('Enter')
+
+  // A GET form, so the search is in the URL and the page is linkable.
+  await expect(page).toHaveURL(new RegExp(`[?&]q=${code}`))
+  await expect(page.getByRole('cell', { name: code, exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: itemName, exact: true })).toHaveCount(1)
+
+  // Nothing else survived the filter: the seed catalogue is still there, it
+  // is simply not on this screen.
+  await expect(page.getByRole('rowgroup', { name: 'Estructura' })).toHaveCount(0)
 })

@@ -1,111 +1,125 @@
 'use client'
 
-import { startTransition, useActionState, useEffect, useId, useRef, useState } from 'react'
+import { startTransition, useActionState, useEffect, useRef, useState, useTransition } from 'react'
+import { toast } from 'sonner'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Tooltip } from '@/components/ui/tooltip'
 import type { PriceBookGroup } from '@/lib/price-book/queries'
 import { idleState, type ActionState } from './action-state'
 import { createItem, deleteGroup, updateGroup } from './actions'
-import { ConfirmButton } from './confirm-button'
-import {
-  CELL_CLASS,
-  ITEM_COLUMNS,
-  ITEM_TABLE_COLUMN_COUNT,
-  ItemFields,
-  type GroupOption,
-} from './item-fields'
+import { useGroupsOpenRequest } from './groups-open'
+import { useGroupDrop, useSectionItems } from './item-dnd'
+import { CELL_CLASS, ITEM_TABLE_COLUMN_COUNT, ItemFields, type GroupOption } from './item-fields'
 import { ItemRow } from './item-row'
+import { DANGER_ICON_BUTTON_CLASS, ICON_BUTTON_CLASS, INLINE_FIELD_CLASS } from './ui'
 
-const BUTTON_CLASS =
-  'rounded border border-slate-400 px-2 py-1 text-xs whitespace-nowrap hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-700 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800 dark:focus-visible:outline-blue-400'
-
-const PRIMARY_BUTTON_CLASS = `${BUTTON_CLASS} bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300`
-
-const FIELD_CLASS =
-  'rounded border border-slate-400 bg-transparent px-1.5 py-1 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-700 dark:border-slate-600 dark:focus-visible:outline-blue-400'
-
-/**
- * Deleting a group never deletes a price: price_book_items.group_id is
- * `on delete set null`, so the items reappear under "Sin grupo". Staff still
- * need to hear how many rows are about to move.
- */
-function deleteQuestion(name: string, itemCount: number): string {
-  if (itemCount === 0) {
-    return `¿Borrar el grupo «${name}»? No tiene ningún concepto.`
-  }
-  if (itemCount === 1) {
-    return `¿Borrar el grupo «${name}»? Su concepto no se borra: pasa a «Sin grupo».`
-  }
-  return `¿Borrar el grupo «${name}»? Sus ${itemCount} conceptos no se borran: pasan a «Sin grupo».`
-}
+const ICON_PROPS = {
+  width: 14,
+  height: 14,
+  viewBox: '0 0 16 16',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.5,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  'aria-hidden': true,
+} as const
 
 /**
- * What an action returned, plus which opening of the form asked for it.
- *
- * useActionState keeps its last state after the form closes, so a message
- * from a refused write outlives the fields that caused it. Stamping the
- * session it belongs to -- and bumping that session on every open and every
- * close -- is what stops it rendering, and being announced again, over the
- * freshly defaulted fields of the next opening.
+ * What an action returned, plus which opening of the form asked for it. See
+ * the same shape in item-row.tsx for why the session stamp is there.
  */
 type FormState = ActionState & { session: number }
 
-/** Seed state for the above: -1 belongs to no opening, so it never matches one. */
 const idleFormState: FormState = { ...idleState, session: -1 }
 
+/**
+ * One group of the catalogue, as a rowgroup of the single price-book table.
+ *
+ * A <tbody>, not a table of its own: a table per group repeated the whole
+ * column header every few rows, which on a real catalogue is the loudest
+ * thing on it. `aria-label` gives the rowgroup the group's name, so the
+ * structure a screen reader hears is the one on screen.
+ *
+ * It is also the drop target for a row dragged out of another group. The
+ * whole rowgroup accepts the drop, not just its heading: aiming at a 28px
+ * strip is a worse gesture than aiming at the block it belongs to.
+ */
 export function GroupSection({
   group,
   groups,
+  priceBookId,
+  filtering,
+  startOpen,
 }: {
   group: PriceBookGroup
   groups: GroupOption[]
+  /** The book this group belongs to; every write carries it. */
+  priceBookId: string
+  /** True when a search or a filter is narrowing the screen. */
+  filtering: boolean
+  /**
+   * Whether this group shows its rows on arrival. A big book arrives folded:
+   * the rows of a group only mount when it is opened, so the screen never
+   * carries the whole catalogue at once, and no group is split to achieve
+   * that.
+   */
+  startOpen: boolean
 }) {
-  const headingId = useId()
-  const newItemFormId = useId()
+  const groupId = group.id
+  const newItemFormId = `new-item-${groupId ?? 'ungrouped'}`
 
-  const [renamer, setRenamer] = useState({ open: false, session: 0 })
-  const [adder, setAdder] = useState({ open: false, session: 0 })
+  const [open, setOpen] = useState(startOpen)
 
-  const renaming = renamer.open
-  const adding = adder.open
-
-  function setRenaming(open: boolean) {
-    setRenamer((current) => ({ open, session: current.session + 1 }))
+  // "Fold all" arrives as a stamped request rather than as a value to mirror,
+  // so applying it is a one-off: adjust state during render when the stamp
+  // changes, which is React's own answer to "reset state when a prop
+  // changes" and re-renders before anything is painted.
+  const request = useGroupsOpenRequest()
+  const [appliedToken, setAppliedToken] = useState(0)
+  if (request && request.token !== appliedToken) {
+    setAppliedToken(request.token)
+    if (request.open !== open) setOpen(request.open)
   }
+  const [renaming, setRenamer] = useState({ open: false, session: 0 })
+  const [adding, setAdder] = useState({ open: false, session: 0 })
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [, startAction] = useTransition()
 
-  function setAdding(open: boolean) {
-    setAdder((current) => ({ open, session: current.session + 1 }))
-  }
-
-  // Bumped after each insert so the new-item row remounts with empty fields,
-  // ready for the next one. Staff enter a catalogue in runs, not one row a day.
-  const [newItemKey, setNewItemKey] = useState(0)
   const renameButton = useRef<HTMLButtonElement>(null)
+  const [newItemKey, setNewItemKey] = useState(0)
+
+  function setRenaming(value: boolean) {
+    setRenamer((current) => ({ open: value, session: current.session + 1 }))
+  }
+
+  function setAdding(value: boolean) {
+    setAdder((current) => ({ open: value, session: current.session + 1 }))
+    if (value) setOpen(true)
+  }
 
   const [renameState, renameAction, renamingPending] = useActionState<FormState, FormData>(
     async (previous, formData) => {
       const next = await updateGroup(previous, formData)
-      // startTransition, because a state update after an await is not part of
-      // the action's transition on its own: it would commit a frame before the
-      // revalidated table arrives, on the previous render's data. See
-      // node_modules/next/dist/docs/01-app/02-guides/interactive-apps.md.
       if (next.error === null) {
         startTransition(() => setRenaming(false))
+        toast.success('Grupo guardado')
       }
-      return { ...next, session: renamer.session }
+      return { ...next, session: renaming.session }
     },
     idleFormState,
   )
-
-  const [deleteState, deleteAction] = useActionState(deleteGroup, idleState)
 
   const [addState, addAction, addPending] = useActionState<FormState, FormData>(
     async (previous, formData) => {
       const next = await createItem(previous, formData)
       // Inside a transition so the blank row and the revalidated table commit
-      // together; see the note in the rename action above.
+      // together; see the note in item-row.tsx.
       if (next.error === null) {
         startTransition(() => setNewItemKey((key) => key + 1))
+        toast.success('Concepto añadido')
       }
-      return { ...next, session: adder.session }
+      return { ...next, session: adding.session }
     },
     idleFormState,
   )
@@ -114,174 +128,336 @@ export function GroupSection({
   // to the button that opened it rather than dropping it on <body>.
   const wasRenaming = useRef(false)
   useEffect(() => {
-    if (wasRenaming.current && !renaming) {
+    if (wasRenaming.current && !renaming.open) {
       renameButton.current?.focus()
     }
-    wasRenaming.current = renaming
-  }, [renaming])
+    wasRenaming.current = renaming.open
+  }, [renaming.open])
 
-  // The "Sin grupo" bucket is not a group anyone created: there is no row to
-  // rename and none to delete.
-  const groupId = group.id
-  // Only the messages the current openings produced. A failed delete has no
-  // form to open or close, so its message has no session and simply stays.
-  const renameError = renameState.session === renamer.session ? renameState.error : null
-  const addError = addState.session === adder.session ? addState.error : null
-  const groupError = renameError ?? deleteState.error
+  function runDeleteGroup() {
+    return new Promise<void>((resolve) => {
+      startAction(async () => {
+        const data = new FormData()
+        data.set('id', groupId ?? '')
+        const result = await deleteGroup(idleState, data)
+        if (result.error) toast.error(result.error)
+        else toast.error(`Grupo «${group.name}» borrado`)
+        resolve()
+      })
+    })
+  }
+
+  // The rows as the screen should show them: what the server sent, with any
+  // move still on its way to the database already applied.
+  const { items, itemCount } = useSectionItems(group)
+  const { dropRef, dropProps } = useGroupDrop(groupId, group.name, () => setOpen(true))
+
+  /**
+   * Unfiltered, the honest number is the group's own total: the page is only
+   * deciding which rows are visible, not which exist. Under a filter it is
+   * the rows on this page, because the total would be a count of concepts
+   * the screen is deliberately not showing.
+   */
+  const shownCount = filtering ? items.length : itemCount
+
+  const renameError = renameState.session === renaming.session ? renameState.error : null
+  const addError = addState.session === adding.session ? addState.error : null
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 id={headingId} className="text-lg font-semibold">
-          {group.name}
-        </h2>
-        <button
-          type="button"
-          aria-label={`Añadir concepto a ${group.name}`}
-          aria-expanded={adding}
-          onClick={() => setAdding(!adding)}
-          className={BUTTON_CLASS}
+    <>
+      <tbody
+        ref={dropRef}
+        {...dropProps}
+        aria-label={group.name}
+        className="group/section transition-colors duration-150 data-[drop-target]:bg-accent-soft/50"
+      >
+        <tr
+          className={`transition-colors duration-150 in-data-[drop-target]:bg-accent-soft ${
+            open ? 'bg-surface-sunk' : 'bg-surface hover:bg-surface-hover'
+          }`}
         >
-          + Concepto
-        </button>
-        {groupId === null ? null : (
-          <>
-            <button
-              ref={renameButton}
-              type="button"
-              aria-label={`Renombrar ${group.name}`}
-              aria-expanded={renaming}
-              onClick={() => setRenaming(!renaming)}
-              className={BUTTON_CLASS}
-            >
-              Renombrar
-            </button>
-            <form action={deleteAction}>
-              <input type="hidden" name="id" value={groupId} />
-              <ConfirmButton question={deleteQuestion(group.name, group.items.length)}>
-                Borrar grupo
-              </ConfirmButton>
-            </form>
-          </>
-        )}
-      </div>
-
-      {renaming && groupId !== null ? (
-        <form
-          action={renameAction}
-          onReset={(event) => event.preventDefault()}
-          className="flex flex-wrap items-end gap-2"
-        >
-          <input type="hidden" name="id" value={groupId} />
-          <input
-            name="name"
-            aria-label="Nombre"
-            defaultValue={group.name}
-            maxLength={80}
-            autoFocus
-            className={FIELD_CLASS}
-          />
-          <input
-            name="position"
-            type="number"
-            aria-label="Posición"
-            defaultValue={group.position}
-            min={0}
-            max={9999}
-            step={1}
-            className={`${FIELD_CLASS} w-24`}
-          />
-          <button type="submit" disabled={renamingPending} className={PRIMARY_BUTTON_CLASS}>
-            {renamingPending ? 'Guardando…' : 'Guardar'}
-          </button>
-          <button type="button" onClick={() => setRenaming(false)} className={BUTTON_CLASS}>
-            Cancelar
-          </button>
-        </form>
-      ) : null}
-
-      {groupError ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-          {groupError}
-        </p>
-      ) : null}
-
-      <table className="w-full border-collapse text-sm">
-        <caption className="sr-only">Conceptos de {group.name}</caption>
-        <thead>
-          <tr>
-            {ITEM_COLUMNS.map((column) => (
-              <th
-                key={column.label}
-                scope="col"
-                className={`border-b border-slate-400 px-2 py-1.5 font-medium dark:border-slate-600 ${
-                  column.numeric ? 'text-right' : 'text-left'
-                }`}
-              >
-                {column.label}
-              </th>
-            ))}
-            <th
-              scope="col"
-              className="border-b border-slate-400 px-2 py-1.5 text-left font-medium dark:border-slate-600"
-            >
-              Acciones
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {group.items.map((item) => (
-            <ItemRow key={item.id} item={item} groups={groups} />
-          ))}
-
-          {adding ? (
-            <>
-              <tr key={newItemKey}>
-                <ItemFields
-                  formId={newItemFormId}
-                  groups={groups}
-                  defaultGroupId={groupId}
-                />
-                <td className={CELL_CLASS}>
+          <th
+            scope="colgroup"
+            colSpan={ITEM_TABLE_COLUMN_COUNT}
+            className={`px-2 py-1.5 text-left font-medium in-data-[drop-target]:shadow-[inset_3px_0_0_var(--accent)] ${
+              open ? 'border-y border-line' : 'border-b border-line-soft'
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              {renaming.open && groupId !== null ? (
+                /*
+                  Renaming happens where the name is. The old form unfolded a
+                  row of its own under the heading, which moved the whole
+                  catalogue down to change one word.
+                */
+                <form
+                  action={renameAction}
+                  onReset={(event) => event.preventDefault()}
+                  className="flex items-center gap-1.5"
+                >
+                  <input type="hidden" name="id" value={groupId} />
                   {/*
-                    Same two reasons as the edit row: the form cannot wrap the
-                    cells, and it must not clear itself when a write is refused.
+                    updateGroup writes the whole row, so the position has to
+                    travel with the name or every rename would reset it.
                   */}
-                  <form
-                    id={newItemFormId}
-                    action={addAction}
-                    onReset={(event) => event.preventDefault()}
+                  <input type="hidden" name="position" value={group.position} />
+                  {/*
+                    The chevron stays and the padding matches the heading
+                    button's, so the name turns into a field where it stands
+                    instead of jumping left by the width of the arrow.
+                  */}
+                  <span className="flex items-center gap-2 px-1 py-0.5">
+                    <svg
+                      {...ICON_PROPS}
+                      className={`text-faint ${open ? 'rotate-90' : ''}`}
+                    >
+                      <path d="M6 3.6 10.4 8 6 12.4" />
+                    </svg>
+                    <input
+                      name="name"
+                      aria-label={`Nombre de ${group.name}`}
+                      defaultValue={group.name}
+                      maxLength={80}
+                      autoFocus
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') setRenaming(false)
+                      }}
+                      className={`${INLINE_FIELD_CLASS} w-64 text-xs font-semibold tracking-[0.04em] text-ink uppercase`}
+                    />
+                  </span>
+                  <button
+                    type="submit"
+                    disabled={renamingPending}
+                    aria-label="Guardar el nombre"
+                    className={ICON_BUTTON_CLASS}
                   >
-                    <button type="submit" disabled={addPending} className={PRIMARY_BUTTON_CLASS}>
-                      {addPending ? 'Añadiendo…' : 'Añadir'}
-                    </button>
-                  </form>
-                </td>
-              </tr>
-              {addError ? (
-                <tr>
-                  <td colSpan={ITEM_TABLE_COLUMN_COUNT} className={CELL_CLASS}>
-                    <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-                      {addError}
-                    </p>
-                  </td>
-                </tr>
-              ) : null}
-            </>
-          ) : null}
-
-          {group.items.length === 0 && !adding ? (
-            <tr>
-              <td
-                colSpan={ITEM_TABLE_COLUMN_COUNT}
-                className={`${CELL_CLASS} text-slate-600 dark:text-slate-400`}
+                    <svg {...ICON_PROPS} strokeWidth={2}>
+                      <path d="m3.2 8.4 3.2 3.2 6.4-6.8" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRenaming(false)}
+                    aria-label="Cancelar"
+                    className={ICON_BUTTON_CLASS}
+                  >
+                    <svg {...ICON_PROPS} strokeWidth={2}>
+                      <path d="m4 4 8 8M12 4l-8 8" />
+                    </svg>
+                  </button>
+                  {renameError ? (
+                    <span role="alert" className="text-2xs font-normal normal-case text-danger">
+                      {renameError}
+                    </span>
+                  ) : null}
+                </form>
+              ) : (
+              <button
+                type="button"
+                onClick={() => setOpen(!open)}
+                aria-expanded={open}
+                aria-label={`${open ? 'Contraer' : 'Expandir'} ${group.name}`}
+                className="flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
               >
-                Este grupo no tiene conceptos.
+                <svg
+                  {...ICON_PROPS}
+                  className={`text-faint transition-transform ${open ? 'rotate-90' : ''}`}
+                >
+                  <path d="M6 3.6 10.4 8 6 12.4" />
+                </svg>
+                <span className="text-xs font-semibold tracking-[0.04em] text-ink uppercase transition-colors in-data-[drop-target]:text-accent">
+                  {group.name}
+                </span>
+                {/*
+                  The count is of rows on THIS page, so a zero would be a lie
+                  about a group whose concepts are on the next one. When
+                  there are none here, the row below says so in words.
+                */}
+                {!open && shownCount > 0 ? (
+                  <span className="text-2xs font-normal tracking-normal text-muted normal-case">
+                    <span className="num">{shownCount}</span>{' '}
+                    {shownCount === 1 ? 'concepto' : 'conceptos'}
+                  </span>
+                ) : null}
+                {open && shownCount > 0 ? (
+                  <span className="num rounded-full bg-surface px-1.5 text-2xs text-muted">
+                    {shownCount}
+                  </span>
+                ) : null}
+              </button>
+              )}
+
+              <div className="ml-auto flex items-center gap-1.5">
+                {groupId === null ? null : (
+                  // Renaming and deleting a group are rare and one of them is
+                  // destructive, so they wait for the pointer or the keyboard
+                  // to reach this rowgroup. Adding a concept is the reason
+                  // staff open this screen, so it never hides.
+                  <div className="flex items-center gap-1.5 opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
+                    <Tooltip label="Renombrar grupo">
+                      <button
+                        ref={renameButton}
+                        type="button"
+                        aria-label={`Renombrar ${group.name}`}
+                        aria-expanded={renaming.open}
+                        onClick={() => setRenaming(!renaming.open)}
+                        className={ICON_BUTTON_CLASS}
+                      >
+                        <svg {...ICON_PROPS}>
+                          <path d="M11.2 2.6a1.6 1.6 0 0 1 2.2 2.2L5.6 12.6l-3 .8.8-3Z" />
+                        </svg>
+                      </button>
+                    </Tooltip>
+                    <Tooltip label="Borrar grupo">
+                      <button
+                        type="button"
+                        aria-label={`Borrar grupo ${group.name}`}
+                        onClick={() => setConfirmingDelete(true)}
+                        className={DANGER_ICON_BUTTON_CLASS}
+                      >
+                        <svg {...ICON_PROPS}>
+                          <path d="M2.8 4.2h10.4" />
+                          <path d="M6.2 4.2V2.8h3.6v1.4" />
+                          <path d="M4.2 4.2h7.6l-.6 8.2a.8.8 0 0 1-.8.8H5.6a.8.8 0 0 1-.8-.8Z" />
+                        </svg>
+                      </button>
+                    </Tooltip>
+                  </div>
+                )}
+              </div>
+            </div>
+          </th>
+        </tr>
+
+        {open
+          ? items.map((item) => (
+              <ItemRow key={item.id} item={item} groups={groups} groupName={group.name} />
+            ))
+          : null}
+
+        {open && adding.open ? (
+          <>
+            <tr
+              key={newItemKey}
+              className="bg-surface-hover"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setAdding(false)
+              }}
+            >
+              <ItemFields formId={newItemFormId} />
+              <td className={CELL_CLASS}>
+                <form
+                  id={newItemFormId}
+                  action={addAction}
+                  onReset={(event) => event.preventDefault()}
+                  className="flex items-center justify-end gap-1"
+                >
+                  {/*
+                    The new row belongs to the group it was typed into. There
+                    is no select for it: if it lands in the wrong place, the
+                    handle in the first column moves it in one drag.
+                  */}
+                  <input type="hidden" name="price_book_id" value={priceBookId} />
+                  <input type="hidden" name="group_id" value={groupId ?? ''} />
+                  <Tooltip label="Añadir">
+                    <button
+                      type="submit"
+                      disabled={addPending}
+                      aria-label="Añadir"
+                      className={ICON_BUTTON_CLASS}
+                    >
+                      <svg {...ICON_PROPS} strokeWidth={2}>
+                        <path d="m3.2 8.4 3.2 3.2 6.4-6.8" />
+                      </svg>
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="Cancelar">
+                    <button
+                      type="button"
+                      onClick={() => setAdding(false)}
+                      aria-label="Cancelar"
+                      className={ICON_BUTTON_CLASS}
+                    >
+                      <svg {...ICON_PROPS} strokeWidth={2}>
+                        <path d="m4 4 8 8M12 4l-8 8" />
+                      </svg>
+                    </button>
+                  </Tooltip>
+                </form>
               </td>
             </tr>
-          ) : null}
-        </tbody>
-      </table>
-    </section>
+            {addError ? (
+              <tr>
+                <td
+                  colSpan={ITEM_TABLE_COLUMN_COUNT}
+                  className="border-b border-line-soft px-3 py-2"
+                >
+                  <p role="alert" className="text-sm text-danger">
+                    {addError}
+                  </p>
+                </td>
+              </tr>
+            ) : null}
+          </>
+        ) : null}
+
+        {open && !adding.open ? (
+          <tr>
+            {/*
+              The cell stays a cell -- `display: flex` on a <td> drops its
+              table-cell box, and with it the colspan that makes this row as
+              wide as the table. The stacking happens in a div inside it.
+            */}
+            <td colSpan={ITEM_TABLE_COLUMN_COUNT} className="border-b border-line-soft p-0">
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+                {/*
+                The way to add a concept is at the END of the group, where
+                the last row is and where the eye already is after reading
+                it -- not in a form above the table.
+              */}
+                <button
+                  type="button"
+                  aria-label={`Añadir concepto a ${group.name}`}
+                  onClick={() => setAdding(true)}
+                  className="flex items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs text-muted transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+                >
+                  <svg {...ICON_PROPS} strokeWidth={1.8} className="text-faint">
+                    <path d="M8 3.4v9.2M3.4 8h9.2" />
+                  </svg>
+                  {items.length > 0
+                    ? 'Añadir concepto'
+                    : filtering
+                      ? 'Ningún concepto de este grupo coincide. Añadir uno'
+                      : 'Este grupo no tiene conceptos. Añade el primero.'}
+                </button>
+                {/*
+                A group whose concepts all sit on another page must not be
+                described as empty -- it is not. The link is the way to see
+                the ones this page is not showing.
+              */}
+              </div>
+            </td>
+          </tr>
+        ) : null}
+      </tbody>
+
+      {groupId === null ? null : (
+        <ConfirmDialog
+          open={confirmingDelete}
+          onOpenChange={setConfirmingDelete}
+          title={`Borrar el grupo «${group.name}»`}
+          description="El grupo desaparece del tarifario. Sus conceptos no."
+          risks={[
+            group.itemCount === 0
+              ? 'Este grupo no tiene ningún concepto, así que no se mueve nada.'
+              : `Sus ${group.itemCount} conceptos pasan a «Sin grupo» y siguen ahí con su código y su precio.`,
+            'Los presupuestos ya hechos no cambian: cada línea guardó el nombre del grupo cuando se escribió.',
+            'Para volver a tenerlo habría que crear el grupo otra vez y arrastrar los conceptos de vuelta.',
+          ]}
+          confirmLabel="Borrar grupo"
+          onConfirm={runDeleteGroup}
+        />
+      )}
+    </>
   )
 }

@@ -1,29 +1,41 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
-import { signOut } from '@/app/auth/actions'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { PageHeader } from './page-header'
 
-export default async function AdminHomePage() {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export const metadata: Metadata = { title: 'Panel' }
 
+/**
+ * Deliberately thin. The dashboard's job today is to get staff into the one
+ * screen that exists; the counts and the pending-work list belong here once
+ * there are quotes and leads to count, not as placeholder tiles now.
+ */
+const SHORTCUTS = [
+  {
+    href: '/admin/price-books',
+    title: 'Tarifarios',
+    description: 'Los catálogos de precios: grupos, conceptos, coste y precio.',
+  },
+]
+
+export default function AdminHomePage() {
   return (
-    <main className="flex min-h-screen flex-col gap-6 p-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Panel</h1>
-        <form action={signOut}>
-          <button type="submit" className="rounded border px-3 py-1.5 text-sm">
-            Salir
-          </button>
-        </form>
+    <>
+      <PageHeader title="Panel" />
+      <div className="flex-1 overflow-y-auto p-5">
+        <ul className="grid max-w-3xl gap-3 sm:grid-cols-2">
+          {SHORTCUTS.map((shortcut) => (
+            <li key={shortcut.href}>
+              <Link
+                href={shortcut.href}
+                className="flex h-full flex-col gap-1 rounded-lg border border-line bg-surface p-4 shadow-card transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                <span className="text-base font-medium">{shortcut.title}</span>
+                <span className="text-xs text-muted">{shortcut.description}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </div>
-      <p className="text-sm text-slate-600">Sesión iniciada como {user?.email}</p>
-      <nav>
-        <Link href="/admin/price-book" className="text-sm underline">
-          Tarifario
-        </Link>
-      </nav>
-    </main>
+    </>
   )
 }

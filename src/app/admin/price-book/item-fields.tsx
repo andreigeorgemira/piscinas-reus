@@ -1,43 +1,48 @@
+import type { TableColumn } from '@/components/ui/table'
 import { formatMoney } from '@/lib/price-book/decimal'
-import { UNGROUPED_NAME, type PriceBookItem } from '@/lib/price-book/queries'
+import type { PriceBookItem } from '@/lib/price-book/queries'
 import { UNIT_LABELS, UNIT_TYPES } from '@/lib/price-book/schema'
+import { INLINE_FIELD_CLASS, INLINE_FIELD_FILL_CLASS } from './ui'
 
 /** A group an item can be filed under. The "Sin grupo" bucket is not one. */
 export type GroupOption = { id: string; name: string }
 
-type Column = { label: string; numeric?: boolean }
-
 /**
- * The columns this component fills, in order. Exported so the table header
- * and the fields below it can never drift apart, and so a row that needs to
- * span the whole table (an error message) knows how wide the table is. The
- * `+ 1` is the actions column, which each row builds for itself.
+ * The catalogue's columns, in order.
+ *
+ * There is no Grupo column: every row is already inside the rowgroup for its
+ * group, so it repeated the heading once per row. Moving an item is the
+ * handle in the first column instead - drag it, or open it and pick.
  */
-export const ITEM_COLUMNS: Column[] = [
-  { label: 'Código' },
-  { label: 'Concepto' },
-  { label: 'Grupo' },
-  { label: 'Unidad' },
-  { label: 'Coste', numeric: true },
-  { label: 'Precio', numeric: true },
-  { label: 'Activo' },
+export const PRICE_BOOK_COLUMNS: TableColumn[] = [
+  { key: 'handle', label: 'Mover', width: 'w-9', srOnly: true },
+  { key: 'code', label: 'Código', width: 'w-32' },
+  { key: 'name', label: 'Concepto' },
+  { key: 'unit', label: 'Unidad', width: 'w-24' },
+  { key: 'cost', label: 'Coste', width: 'w-32', align: 'right' },
+  { key: 'price', label: 'Precio', width: 'w-32', align: 'right' },
+  { key: 'active', label: 'Activo', width: 'w-20' },
+  { key: 'actions', label: 'Acciones', width: 'w-24', srOnly: true },
 ]
 
-export const ITEM_TABLE_COLUMN_COUNT = ITEM_COLUMNS.length + 1
+export const ITEM_TABLE_COLUMN_COUNT = PRICE_BOOK_COLUMNS.length
 
-export const CELL_CLASS = 'border-b border-slate-200 px-2 py-1 align-top dark:border-slate-800'
+export const CELL_CLASS = 'border-b border-line-soft px-3 py-2 align-middle'
 
-const FIELD_CLASS =
-  'w-full rounded border border-slate-400 bg-transparent px-1.5 py-1 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-700 dark:border-slate-600 dark:focus-visible:outline-blue-400'
+const FILL = `${INLINE_FIELD_CLASS} ${INLINE_FIELD_FILL_CLASS}`
 
 /**
- * The editable cells shared by the edit row and the new-item row.
+ * The editable cells, shared by the edit row and the new-item row.
  *
  * Every control carries `form={formId}` instead of sitting inside the form.
  * A <form> is not valid between <tr> and <td>: the HTML parser hoists it out
  * of the table and takes its inputs with it, so the row would post an empty
  * body. The form element therefore lives in the row's actions cell and the
  * controls here join it by id.
+ *
+ * Each field wears the type classes of the cell it replaces in ItemRow, so
+ * opening a row turns its text into fields where it stands instead of
+ * swapping it for a taller form. Keep the two in step.
  *
  * The names are on `aria-label`, not on a visible <label>. The column header
  * already names each field for a sighted reader, and repeating it inside
@@ -46,19 +51,15 @@ const FIELD_CLASS =
  */
 export function ItemFields({
   formId,
-  groups,
   item,
-  defaultGroupId,
 }: {
   formId: string
-  groups: GroupOption[]
   /** The row being edited, or undefined for the new-item row. */
   item?: PriceBookItem
-  /** Which group the row starts out in. */
-  defaultGroupId: string | null
 }) {
   return (
     <>
+      <td className={CELL_CLASS} />
       <td className={CELL_CLASS}>
         <input
           form={formId}
@@ -66,86 +67,113 @@ export function ItemFields({
           aria-label="Código"
           defaultValue={item?.code ?? ''}
           maxLength={40}
+          placeholder="REV-001"
           // The first field of a row that only ever appears in response to a
           // click, so taking focus here continues the gesture rather than
           // stealing it.
           autoFocus
-          className={`${FIELD_CLASS} font-mono`}
+          className={`${FILL} font-mono text-xs text-muted`}
         />
       </td>
       <td className={CELL_CLASS}>
-        <input
-          form={formId}
-          name="name"
-          aria-label="Concepto"
-          defaultValue={item?.name ?? ''}
-          maxLength={200}
-          className={FIELD_CLASS}
-        />
-        <input
-          form={formId}
-          name="description"
-          aria-label="Descripción"
-          defaultValue={item?.description ?? ''}
-          maxLength={2000}
-          className={`${FIELD_CLASS} mt-1`}
-        />
+        {/*
+          The description is always offered, even when the row shows none,
+          because this is the only place to write one. It is the one field
+          that can make the open row taller than the closed one.
+        */}
+        <div className="flex flex-col gap-[3px]">
+          <input
+            form={formId}
+            name="name"
+            aria-label="Concepto"
+            defaultValue={item?.name ?? ''}
+            maxLength={200}
+            placeholder="Nombre del concepto"
+            className={`${FILL} font-medium`}
+          />
+          <input
+            form={formId}
+            name="description"
+            aria-label="Descripción"
+            defaultValue={item?.description ?? ''}
+            maxLength={2000}
+            placeholder="Descripción (opcional)"
+            className={`${FILL} text-xs text-muted`}
+          />
+        </div>
       </td>
       <td className={CELL_CLASS}>
-        <select
-          form={formId}
-          name="group_id"
-          aria-label="Grupo"
-          defaultValue={defaultGroupId ?? ''}
-          className={FIELD_CLASS}
-        >
-          <option value="">{UNGROUPED_NAME}</option>
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td className={CELL_CLASS}>
-        <select
-          form={formId}
-          name="unit"
-          aria-label="Unidad"
-          defaultValue={item?.unit ?? 'unit'}
-          className={FIELD_CLASS}
-        >
-          {UNIT_TYPES.map((unit) => (
-            <option key={unit} value={unit}>
-              {UNIT_LABELS[unit]}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          {/*
+            appearance-none, because the native select brings its own height
+            and arrow and would not sit on the line the unit text sat on. The
+            arrow below replaces it.
+          */}
+          <select
+            form={formId}
+            name="unit"
+            aria-label="Unidad"
+            defaultValue={item?.unit ?? 'unit'}
+            className={`${FILL} block h-5 cursor-pointer appearance-none pr-5 text-xs text-muted`}
+          >
+            {UNIT_TYPES.map((unit) => (
+              <option key={unit} value={unit}>
+                {UNIT_LABELS[unit]}
+              </option>
+            ))}
+          </select>
+          <svg
+            width={12}
+            height={12}
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 right-0 -translate-y-1/2 text-faint"
+          >
+            <path d="m4.4 6.2 3.6 3.6 3.6-3.6" />
+          </svg>
+        </div>
       </td>
       <td className={CELL_CLASS}>
         {/*
           Text, never type="number": staff type prices the Spanish way and a
           number input silently discards a comma, so '48,5' would post as ''.
           inputMode gets the numeric keypad on a phone without that cost.
+
+          The box is a <label> holding the input and the euro sign, so the
+          figures end exactly where formatEuros ends them in the closed row
+          and a click on the sign still lands in the field.
         */}
-        <input
-          form={formId}
-          name="unit_cost"
-          aria-label="Coste"
-          inputMode="decimal"
-          defaultValue={item ? formatMoney(item.unitCost) : ''}
-          className={`${FIELD_CLASS} text-right tabular-nums`}
-        />
+        <label className={`${FILL} num flex text-muted`}>
+          <input
+            form={formId}
+            name="unit_cost"
+            aria-label="Coste"
+            inputMode="decimal"
+            defaultValue={item ? formatMoney(item.unitCost) : ''}
+            placeholder="0,00"
+            className="min-w-0 flex-1 bg-transparent text-right outline-none placeholder:text-faint"
+          />
+          <span aria-hidden="true">{' €'}</span>
+        </label>
       </td>
       <td className={CELL_CLASS}>
-        <input
-          form={formId}
-          name="unit_price"
-          aria-label="Precio"
-          inputMode="decimal"
-          defaultValue={item ? formatMoney(item.unitPrice) : ''}
-          className={`${FIELD_CLASS} text-right tabular-nums`}
-        />
+        <label className={`${FILL} num flex font-medium`}>
+          <input
+            form={formId}
+            name="unit_price"
+            aria-label="Precio"
+            inputMode="decimal"
+            defaultValue={item ? formatMoney(item.unitPrice) : ''}
+            placeholder="0,00"
+            className="min-w-0 flex-1 bg-transparent text-right outline-none placeholder:text-faint"
+          />
+          <span aria-hidden="true">{' €'}</span>
+        </label>
       </td>
       <td className={CELL_CLASS}>
         {/*
@@ -160,7 +188,7 @@ export function ItemFields({
           name="is_active"
           aria-label="Activo"
           defaultChecked={item?.isActive ?? true}
-          className="mt-1.5 size-4 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-700 dark:focus-visible:outline-blue-400"
+          className="size-4 accent-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
         />
       </td>
     </>

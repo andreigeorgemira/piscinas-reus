@@ -220,7 +220,9 @@ test('signs out and locks the dashboard again', async ({ page }) => {
   await submitLogin(page, staffEmail, password)
   await expect(page).toHaveURL(/\/admin/)
 
-  await page.getByRole('button', { name: 'Salir' }).click()
+  // Signing out lives in the account menu at the foot of the sidebar now.
+  await page.getByRole('button', { name: /^Cuenta de/ }).click()
+  await page.getByRole('button', { name: 'Cerrar sesión' }).click()
   await expect(page).toHaveURL(/\/login/)
 
   await page.goto('/admin')

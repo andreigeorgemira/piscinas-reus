@@ -13,3 +13,11 @@
 export type ActionState = { error: string | null }
 
 export const idleState: ActionState = { error: null }
+
+/**
+ * What moveItem returns. Besides the error, the code the concept could take
+ * in its new group -- offered, never applied, because the code is what a CSV
+ * re-import matches rows on, and changing it silently would turn the next
+ * import of the same file into a duplicate.
+ */
+export type MoveState = ActionState & { renumber: { from: string; to: string } | null }
