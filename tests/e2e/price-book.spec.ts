@@ -80,6 +80,27 @@ async function createGroup(page: Page, name: string) {
   await page.getByRole('button', { name: 'Nuevo grupo' }).click()
   await page.getByLabel('Nombre del grupo').fill(name)
   await page.getByRole('button', { name: 'Crear grupo' }).click()
+  await dismissToast(page, 'Grupo creado')
+}
+
+/**
+ * Waits for a toast to appear, then for it to leave.
+ *
+ * Toasts stack at the bottom right, over the table's last column -- where
+ * every row keeps its buttons. A test that clicks one of those buttons, then
+ * fills fields, never moves the mouse: the toast that appears under the
+ * pointer counts as hovered, sonner pauses its timer, and every retry of the
+ * next click hovers it again. It never leaves, and the click times out
+ * (CI on PR #5). A person reaches for the next field and the toast goes on
+ * its own; here the mouse is moved away on purpose.
+ *
+ * Waiting for the named toast first matters: checking for "no toasts" before
+ * the server has answered passes at once, and the toast lands afterwards.
+ */
+async function dismissToast(page: Page, text: string) {
+  await expect(page.locator('[data-sonner-toast]').filter({ hasText: text })).toBeVisible()
+  await page.mouse.move(0, 0)
+  await expect(page.locator('[data-sonner-toast]')).toHaveCount(0, { timeout: 10_000 })
 }
 
 /**
@@ -163,6 +184,7 @@ test('creates a group, adds a concept and edits its price inline', async ({ page
   await region.getByRole('button', { name: 'Añadir', exact: true }).click()
 
   await expect(region.getByRole('button', { name: `Editar ${itemName}` })).toBeVisible()
+  await dismissToast(page, 'Concepto añadido')
 
   // A successful add reopens the form blank, ready for the next concept --
   // closing it again leaves exactly one set of Código/Concepto/Coste/Precio
@@ -348,6 +370,7 @@ test('reports a duplicate code in Spanish instead of crashing', async ({ page })
   await region.getByLabel('Precio', { exact: true }).fill('9,00')
   await region.getByRole('button', { name: 'Añadir', exact: true }).click()
   await expect(region.getByRole('button', { name: `Editar ${firstName}` })).toBeVisible()
+  await dismissToast(page, 'Concepto añadido')
 
   // The add row is blank again, ready for the second (colliding) concept.
   await region.getByLabel('Código', { exact: true }).fill(code)
@@ -420,6 +443,7 @@ test('retires and reactivates a concept', async ({ page }) => {
 
   await expect(row.getByRole('button', { name: `Reactivar ${itemName}` })).toBeVisible()
   await expect(row.getByText('No', { exact: true })).toBeVisible()
+  await dismissToast(page, 'Concepto retirado del catálogo')
 
   await row.getByRole('button', { name: `Reactivar ${itemName}` }).click()
 
