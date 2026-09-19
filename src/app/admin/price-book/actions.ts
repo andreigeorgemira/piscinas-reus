@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import type { PostgrestError } from '@supabase/supabase-js'
 import { requireAdmin } from '@/lib/auth/require-admin'
-import { idleState, type ActionState } from './action-state'
+import { idleState, type ActionState, type MoveState } from './action-state'
 import {
   firstIssue,
   groupInputFromForm,
@@ -12,11 +12,12 @@ import {
   itemInputSchema,
   itemInputToRow,
 } from '@/lib/price-book/schema'
+import { suggestCode } from '@/lib/price-book/code'
 
 // Re-exported so callers still read the contract off this module. Only the
 // type: a value re-export would be a runtime export of a 'use server' file,
 // which is exactly what ./action-state exists to avoid.
-export type { ActionState }
+export type { ActionState, MoveState }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -308,6 +309,86 @@ export async function deleteItem(
 export async function moveItem(
   _previous: ActionState,
   formData: FormData,
+): Promise<MoveState> {
+  const supabase = await requireAdmin()
+
+  const id = readId(formData, 'id')
+  if (id === null) {
+    return { error: INVALID_ITEM_ID, renumber: null }
+  }
+
+  const rawGroup = formData.get('group_id')
+  const groupId = typeof rawGroup === 'string' && rawGroup !== '' ? rawGroup : null
+  if (groupId !== null && !UUID_RE.test(groupId)) {
+    return { error: INVALID_GROUP_ID, renumber: null }
+  }
+
+  const { data: moved, error } = await supabase
+    .from('price_book_items')
+    .update({ group_id: groupId })
+    .eq('id', id)
+    .select('code, price_book_id')
+    .single()
+
+  if (error) {
+    return { error: describeWriteError(error, INVALID_GROUP_ID), renumber: null }
+  }
+
+  // Every book's screen, because most of these writes know the row they
+  // touched but not which catalogue it hangs from.
+  revalidatePath('/admin/price-books', 'layout')
+
+  const to = groupId === null ? null : await codeInGroup(supabase, id, moved, groupId)
+  return { error: null, renumber: to && moved.code ? { from: moved.code, to } : null }
+}
+
+/**
+ * The code a concept just moved into `groupId` could take there, read from
+ * the database rather than from the screen: under a filter the screen holds
+ * a page of the book, and the next free number is a question about all of it.
+ *
+ * Best effort. The move has already happened; a failure here only means no
+ * offer is made.
+ */
+async function codeInGroup(
+  supabase: Awaited<ReturnType<typeof requireAdmin>>,
+  id: string,
+  moved: { code: string | null; price_book_id: string },
+  groupId: string,
+): Promise<string | null> {
+  if (moved.code === null) return null
+
+  const { data: coded, error } = await supabase
+    .from('price_book_items')
+    .select('id, code, group_id')
+    .eq('price_book_id', moved.price_book_id)
+    .not('code', 'is', null)
+
+  if (error) {
+    console.error('price-book code suggestion failed', error)
+    return null
+  }
+
+  const groupCodes = coded
+    .filter((row) => row.group_id === groupId && row.id !== id)
+    .map((row) => row.code as string)
+  return suggestCode(
+    moved.code,
+    groupCodes,
+    coded.map((row) => row.code as string),
+  )
+}
+
+/**
+ * Gives a concept the code it was offered after a move.
+ *
+ * The write is conditional on the code still being the one the offer was
+ * made against: the offer sits in a toast for a few seconds, and if someone
+ * edited the code in the meantime, their edit wins over a stale suggestion.
+ */
+export async function renumberItem(
+  _previous: ActionState,
+  formData: FormData,
 ): Promise<ActionState> {
   const supabase = await requireAdmin()
 
@@ -316,23 +397,26 @@ export async function moveItem(
     return { error: INVALID_ITEM_ID }
   }
 
-  const rawGroup = formData.get('group_id')
-  const groupId = typeof rawGroup === 'string' && rawGroup !== '' ? rawGroup : null
-  if (groupId !== null && !UUID_RE.test(groupId)) {
-    return { error: INVALID_GROUP_ID }
+  const from = formData.get('from')
+  const parsed = itemInputSchema.shape.code.safeParse(formData.get('to'))
+  if (typeof from !== 'string' || !parsed.success || parsed.data === null) {
+    return { error: 'El código no es válido.' }
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('price_book_items')
-    .update({ group_id: groupId })
+    .update({ code: parsed.data })
     .eq('id', id)
+    .eq('code', from)
+    .select('id')
 
   if (error) {
-    return { error: describeWriteError(error, INVALID_GROUP_ID) }
+    return { error: describeWriteError(error, DUPLICATE_ITEM_CODE) }
+  }
+  if (data.length === 0) {
+    return { error: `El código de este concepto ya no es ${from}; no se ha cambiado.` }
   }
 
-  // Every book's screen, because most of these writes know the row they
-  // touched but not which catalogue it hangs from.
   revalidatePath('/admin/price-books', 'layout')
   return idleState
 }

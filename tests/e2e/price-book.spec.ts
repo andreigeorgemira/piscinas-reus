@@ -262,6 +262,73 @@ test('drags a concept into another group and it stays there', async ({ page }) =
   ).toBeVisible()
 })
 
+test('offers the destination code after a move, and applies it only when asked', async ({
+  page,
+}) => {
+  const bookId = await seededBookId()
+  const fromName = `Grupo Viejo ${runId}`
+  const toName = `Grupo Nuevo ${runId}`
+  const itemName = `Concepto Renumerado ${runId}`
+  // Prefixes of this run's own, so the next free number is known whatever
+  // else the book holds.
+  const tag = runId.replace(/[^a-z0-9]/gi, '').toUpperCase()
+  const oldCode = `V${tag}-001`
+  const newCode = `N${tag}-003`
+
+  const db = adminDb()
+  const { data: groups, error: groupError } = await db
+    .from('price_book_groups')
+    .insert([
+      { price_book_id: bookId, name: fromName, position: 910 },
+      { price_book_id: bookId, name: toName, position: 911 },
+    ])
+    .select('id, name')
+  if (groupError) throw groupError
+  const fromId = groups.find((group) => group.name === fromName)!.id
+  const toId = groups.find((group) => group.name === toName)!.id
+
+  const row = { price_book_id: bookId, unit: 'unit', unit_cost: 1, unit_price: 2 } as const
+  const { data: item, error: itemError } = await db
+    .from('price_book_items')
+    .insert([
+      { ...row, group_id: fromId, code: oldCode, name: itemName },
+      // The neighbours the destination's convention is learnt from.
+      { ...row, group_id: toId, code: `N${tag}-001`, name: `Concepto Vecino A ${runId}` },
+      { ...row, group_id: toId, code: `N${tag}-002`, name: `Concepto Vecino B ${runId}` },
+    ])
+    .select('id, name')
+  if (itemError) throw itemError
+  const itemId = item.find((row) => row.name === itemName)!.id
+
+  const codeInDb = async () => {
+    const { data, error } = await db.from('price_book_items').select('code').eq('id', itemId).single()
+    if (error) throw error
+    return data.code
+  }
+
+  await loginAsStaff(page)
+  await gotoPriceBook(page)
+
+  const source = page.getByRole('rowgroup', { name: fromName })
+  await source.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+  await source.getByRole('button', { name: `Mover ${itemName} de grupo` }).click()
+  await page.getByRole('dialog').getByRole('button', { name: toName }).click()
+
+  // The move is made and the new code is shown -- but not applied.
+  await expect(page.getByText(`Código: ${oldCode} → ${newCode}`)).toBeVisible()
+  await expect.poll(async () => {
+    const { data } = await db.from('price_book_items').select('group_id').eq('id', itemId).single()
+    return data?.group_id
+  }).toBe(toId)
+  expect(await codeInDb()).toBe(oldCode)
+
+  await page.getByRole('button', { name: 'Cambiar código' }).click()
+  await expect.poll(codeInDb).toBe(newCode)
+
+  await page.reload()
+  await expect(page.getByRole('rowgroup', { name: toName }).getByText(newCode)).toBeVisible()
+})
+
 test('reports a duplicate code in Spanish instead of crashing', async ({ page }) => {
   await loginAsStaff(page)
   await gotoPriceBook(page)

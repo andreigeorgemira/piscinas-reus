@@ -30,7 +30,7 @@ import { toast } from 'sonner'
 import { formatEuros } from '@/lib/price-book/decimal'
 import type { PriceBookGroup, PriceBookItem } from '@/lib/price-book/queries'
 import { idleState } from './action-state'
-import { moveItem } from './actions'
+import { moveItem, renumberItem } from './actions'
 
 /*
  * Dragging a concept from one group to another, on dnd-kit.
@@ -60,6 +60,21 @@ const HOLD_MS = 500
 
 /** How long a move waits to be claimed by the row mounting in its new group. */
 const ARRIVAL_WINDOW_MS = 2000
+
+/** How long the offer to renumber a moved concept stays on screen. */
+const RENUMBER_OFFER_MS = 10_000
+
+function renumber(item: PriceBookItem, from: string, to: string) {
+  startTransition(async () => {
+    const data = new FormData()
+    data.set('id', item.id)
+    data.set('from', from)
+    data.set('to', to)
+    const result = await renumberItem(idleState, data)
+    if (result.error) toast.error(result.error)
+    else toast.success(`«${item.name}» ahora es ${to}`)
+  })
+}
 
 /** A move the screen already shows while the database catches up. */
 type Move = { item: PriceBookItem; toGroupId: string | null }
@@ -109,8 +124,29 @@ export function ItemDragArea({ className, children }: { className?: string; chil
         data.set('id', item.id)
         data.set('group_id', toGroupId ?? '')
         const result = await moveItem(idleState, data)
-        if (result.error) toast.error(result.error)
-        else toast.success(`«${item.name}» movido a ${toName}`)
+        if (result.error) {
+          toast.error(result.error)
+          return
+        }
+
+        const offer = result.renumber
+        if (!offer) {
+          toast.success(`«${item.name}» movido a ${toName}`)
+          return
+        }
+
+        // The code follows the group only if asked: it is the key a CSV
+        // re-import matches rows on (see MoveState). The offer rides on the
+        // confirmation instead of stopping the drag -- reorganising a book
+        // is many moves in a row, and a dialog on each would be the price.
+        toast.success(`«${item.name}» movido a ${toName}`, {
+          description: `Código: ${offer.from} → ${offer.to}`,
+          duration: RENUMBER_OFFER_MS,
+          action: {
+            label: 'Cambiar código',
+            onClick: () => renumber(item, offer.from, offer.to),
+          },
+        })
       })
     },
     [addMove],
