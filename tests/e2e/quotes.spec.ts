@@ -19,6 +19,7 @@ const clientName = `Familia E2E ${runId}`
 const conceptName = `Gresite E2E ${runId}`
 const partidaName = `Partida E2E ${runId}`
 const quoteTitle = `Presupuesto E2E ${runId}`
+const freeLineName = `Desvío de riego ${runId}`
 
 let clientRowId: string
 
@@ -143,7 +144,7 @@ test('keeps a client out of the clients and quotes screens', async ({ page }) =>
   await expect(page).toHaveURL(/\/portal/)
 })
 
-test('writes a quote from the catalogue, sends it, accepts it and reopens it', async ({ page }) => {
+test('builds a quote by ticking the catalogue, sends it, accepts it and reopens it', async ({ page }) => {
   await loginAsStaff(page)
 
   // From the client's own page, which is where a quote actually starts: staff
@@ -151,10 +152,9 @@ test('writes a quote from the catalogue, sends it, accepts it and reopens it', a
   await page.goto('/admin/clients')
   await page.getByLabel('Buscar clientes').fill(clientName)
   // The search box navigates on its own a beat after the typing stops
-  // (src/components/ui/action-bar.tsx). Clicking before that navigation lands
-  // starts a second one that the debounced push then overtakes, and the
-  // browser ends up back on the list. Waiting for the query in the URL is
-  // waiting for the search to have happened.
+  // (src/components/ui/action-bar.tsx). Waiting for the query in the URL is
+  // waiting for that navigation to have happened, so the click below is not
+  // overtaken by it.
   await expect(page).toHaveURL(/[?&]q=/)
   await page.getByRole('link', { name: clientName }).click()
   await expect(page.getByRole('heading', { name: clientName })).toBeVisible()
@@ -165,40 +165,71 @@ test('writes a quote from the catalogue, sends it, accepts it and reopens it', a
 
   await expect(page).toHaveURL(/\/admin\/quotes\/[0-9a-f-]+/, { timeout: 15_000 })
   // The reference is allocated by the database, not by the form.
-  const heading = page.getByRole('heading', { level: 1 })
-  await expect(heading).toHaveText(/^Q-\d{4}-\d{4}$/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Q-\d{4}-\d{4}$/)
 
-  // A line from the catalogue. Every figure on it is a copy of the concept's,
-  // read on the server rather than taken from the browser.
-  await page.getByLabel('Buscar conceptos en el tarifario').fill(conceptName)
-  await page.getByRole('button', { name: new RegExp(conceptName) }).click()
-  await dismissToast(page, 'añadido')
+  // The catalogue IS the editor: the concept is on screen from the start, in its
+  // group, and ticking it writes the line.
+  const group = page.getByRole('region').filter({ hasText: partidaName })
+  await expect(group).toBeVisible()
+  await group.getByRole('checkbox', { name: `Añadir ${conceptName}` }).check()
+  await expect(group.getByRole('checkbox', { name: `Quitar ${conceptName}` })).toBeVisible()
 
-  const line = page.getByRole('row').filter({ hasText: conceptName })
-  await expect(line).toBeVisible()
+  const line = group.getByRole('row').filter({ hasText: conceptName })
+  // Every figure is copied from the concept, read on the server: 1 × 20 €.
+  await expect(line).toContainText('20,00')
 
-  // 12,5 m2 at 20 € is 250 €, and the cost the catalogue carried is 10 €.
-  await page.getByRole('button', { name: `Editar ${conceptName}` }).click()
-  await page.getByLabel('Cantidad', { exact: true }).fill('12,5')
-  await page.getByRole('button', { name: 'Guardar la línea' }).click()
-  await dismissToast(page, 'Línea guardada')
-
+  // A quantity saves on blur, with no Guardar button. 12,5 m2 at 20 € is 250 €.
+  await line.getByLabel(`Cantidad de ${conceptName}`).fill('12,5')
+  await page.keyboard.press('Tab')
   await expect(line).toContainText('250,00')
 
-  // The totals come from the quote_totals view, not from this screen: base
-  // 250,00 and cost 125,00 (12,5 at the catalogue's 10 €).
-  const panel = page.getByRole('complementary', { name: 'Resumen del presupuesto' })
-  await expect(panel).toContainText('250,00')
-  await expect(panel).toContainText('125,00')
+  const totals = page.getByRole('contentinfo')
+  await expect(totals).toContainText('250,00')
+  // Cost came from the catalogue too (10 €), so the margin is the other half.
+  await expect(totals).toContainText('125,00')
 
-  // A line that is in no catalogue.
-  await page.getByRole('button', { name: 'Línea libre' }).click()
-  await page.getByLabel('Concepto', { exact: true }).fill(`Grúa ${runId}`)
-  await page.getByLabel('Precio', { exact: true }).fill('100,00')
-  await page.getByRole('button', { name: 'Añadir línea' }).click()
+  // Marking it optional takes it out of the price without deleting anything.
+  await line.getByRole('button', { name: 'Opcional' }).click()
+  await expect(totals).toContainText('Extras opcionales')
+  await line.getByRole('button', { name: 'Base' }).click()
+  await expect(totals).toContainText('250,00')
+
+  // The same concept twice: the case a checkbox alone cannot express. The copy
+  // owns its name, because "Gresite" twice on a PDF tells the client nothing.
+  await line.getByRole('button', { name: `Duplicar ${conceptName}` }).click()
+  await dismissToast(page, 'Línea duplicada')
+
+  const copyName = `${conceptName} escalera`
+  const copyRow = group.getByRole('row').filter({ hasText: 'copia' })
+  await copyRow.getByRole('textbox').first().fill(copyName)
+  await page.keyboard.press('Tab')
+  await expect(group.getByRole('row').filter({ hasText: copyName })).toBeVisible()
+
+  // A line of this quote and no catalogue, filed INSIDE the group, which is what
+  // makes the PDF print it among its neighbours.
+  await group.getByRole('button', { name: `Línea libre en ${partidaName}` }).click()
+  // Exact labels: every row of the table also has a "Precio de <concepto>"
+  // field, and a substring match would find those too.
+  await group.getByLabel('Concepto', { exact: true }).fill(freeLineName)
+  await group.getByLabel('Precio', { exact: true }).fill('100,00')
+  await group.getByRole('button', { name: `Añadir a ${partidaName}` }).click()
   await dismissToast(page, 'Línea añadida')
 
-  await expect(panel).toContainText('350,00')
+  const freeRow = group.getByRole('row').filter({ hasText: freeLineName })
+  await expect(freeRow).toContainText('línea libre')
+  await expect(freeRow).toContainText('100,00')
+
+  // Unticking a concept that has a copy asks first: the checkbox says whether
+  // the concept is on the quote at all, so it takes both lines.
+  // click, not uncheck: this one opens a dialog instead of flipping the box, so
+  // Playwright's "did the state change" assertion inside uncheck() would fail on
+  // the very behaviour being tested.
+  await group.getByRole('checkbox', { name: `Quitar ${conceptName}` }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Quitar todas' }).click()
+  await expect(group.getByRole('row').filter({ hasText: copyName })).toBeHidden()
+  await expect(group.getByRole('checkbox', { name: `Añadir ${conceptName}` })).toBeVisible()
+  // The free line is untouched: it belongs to the quote, not to the concept.
+  await expect(freeRow).toBeVisible()
 
   // Sending freezes the lines. The refusal is a trigger; what is asserted here
   // is that the screen stops offering the controls whose save it would refuse.
@@ -206,20 +237,13 @@ test('writes a quote from the catalogue, sends it, accepts it and reopens it', a
   await dismissToast(page, 'enviado')
 
   await expect(page.locator('header')).toContainText('Enviado')
-  await expect(page.getByRole('button', { name: `Editar ${conceptName}` })).toBeHidden()
-  await expect(page.getByRole('button', { name: 'Línea libre' })).toBeHidden()
-  await expect(page.getByText('congeladas')).toBeVisible()
-  // The quote's own fields go with the lines: the title and the notes are what
-  // the client is reading, so they stop being editable at the same moment.
-  await expect(panel.getByRole('button', { name: 'Editar' })).toBeHidden()
+  await expect(group.getByRole('checkbox', { name: `Añadir ${conceptName}` })).toBeDisabled()
+  await expect(group.getByRole('button', { name: `Línea libre en ${partidaName}` })).toBeHidden()
 
   // Accepting creates the project, which is what makes a quote work rather than
   // paperwork. The dialog says so before it happens.
   await page.getByRole('button', { name: 'Marcar como aceptado' }).click()
-  await page
-    .getByRole('alertdialog')
-    .getByRole('button', { name: 'Marcar como aceptado' })
-    .click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Marcar como aceptado' }).click()
   await dismissToast(page, 'Proyecto creado')
 
   await expect(page.locator('header')).toContainText(/Proyecto P-\d{4}-\d{4}/)
@@ -232,7 +256,7 @@ test('writes a quote from the catalogue, sends it, accepts it and reopens it', a
 
   await expect(page.locator('header')).toContainText('Borrador')
   await expect(page.locator('header')).toContainText(/Proyecto P-\d{4}-\d{4}/)
-  await expect(page.getByRole('button', { name: `Editar ${conceptName}` })).toBeVisible()
+  await expect(group.getByRole('checkbox', { name: `Añadir ${conceptName}` })).toBeEnabled()
 })
 
 test('lists the quote under its client and filters by status', async ({ page }) => {
@@ -246,7 +270,7 @@ test('lists the quote under its client and filters by status', async ({ page }) 
   await expect(row).toBeVisible({ timeout: 15_000 })
   await expect(row).toContainText(clientName)
   await expect(row).toContainText('Borrador')
-  await expect(row).toContainText('350,00')
+  await expect(row).toContainText('100,00')
 
   // The status filter, which is how staff find what is out of the office.
   await page.goto('/admin/quotes?status=sent')

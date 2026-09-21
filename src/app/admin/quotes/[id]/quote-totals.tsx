@@ -2,66 +2,79 @@ import { formatEuros } from '@/lib/price-book/decimal'
 import type { QuoteTotals as Totals } from '@/lib/quotes/queries'
 
 /**
- * What the quote comes to, as the office reads it.
+ * What the quote comes to, along the bottom of the editor.
  *
- * Every figure here is computed by the quote_totals view
- * (0005_quote_totals.sql), never stored and never added up on this screen: the
- * PDF, the client's page and this panel all read the same arithmetic, so they
- * cannot disagree.
+ * A bar rather than a card in a rail: the table owns the width on this screen,
+ * and the total is the one number somebody glances at between every two edits,
+ * so it sits where the eye already is -- under the last row, always on screen,
+ * never scrolled away.
  *
- * Coste and Margen are on this panel and on no screen a client can reach. What
- * keeps them there is the database -- the client-facing views omit the columns
- * entirely -- not this component.
+ * Every figure is computed by the quote_totals view (0005_quote_totals.sql),
+ * never stored and never added up here: the PDF, the client's page and this bar
+ * read the same arithmetic, so they cannot disagree. Coste and Margen appear on
+ * no screen a client can reach, and what keeps them there is the database -- the
+ * client-facing views omit the columns -- not this component.
  */
-export function QuoteTotals({ totals }: { totals: Totals }) {
+export function QuoteTotalsBar({ totals }: { totals: Totals }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-4 shadow-card">
-      <h2 className="text-sm font-semibold">Totales</h2>
+    <footer className="flex h-16 shrink-0 items-center gap-7 border-t border-line bg-surface px-6">
+      <Figure label="Base" value={formatEuros(totals.baseTotal)} />
 
-      <dl className="flex flex-col gap-1.5">
-        <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-xs text-muted">Base</dt>
-          <dd className="num text-sm">{formatEuros(totals.baseTotal)}</dd>
-        </div>
+      {totals.recommendedTotal > 0 ? (
+        <Figure
+          label="Extras opcionales"
+          value={formatEuros(totals.recommendedTotal)}
+          tone="muted"
+          note="Fuera del total hasta que el cliente los marque"
+        />
+      ) : null}
 
-        {totals.recommendedTotal > 0 ? (
-          <div className="flex items-baseline justify-between gap-3">
-            <dt className="text-xs text-muted">
-              Extras opcionales
-              <span className="block text-2xs text-faint">
-                Fuera del total hasta que el cliente los marque
-              </span>
-            </dt>
-            <dd className="num text-sm text-muted">{formatEuros(totals.recommendedTotal)}</dd>
-          </div>
-        ) : null}
+      {totals.selectedExtrasTotal > 0 ? (
+        <Figure label="Extras marcados" value={formatEuros(totals.selectedExtrasTotal)} />
+      ) : null}
 
-        {totals.selectedExtrasTotal > 0 ? (
-          <div className="flex items-baseline justify-between gap-3">
-            <dt className="text-xs text-muted">Extras marcados</dt>
-            <dd className="num text-sm">{formatEuros(totals.selectedExtrasTotal)}</dd>
-          </div>
-        ) : null}
+      <Figure label="Coste" value={formatEuros(totals.costTotal)} tone="muted" />
+      <Figure
+        label="Margen"
+        value={formatEuros(totals.margin)}
+        tone={totals.margin < 0 ? 'danger' : 'success'}
+      />
 
-        <div className="mt-1 flex items-baseline justify-between gap-3 border-t border-line pt-2">
-          <dt className="text-sm font-semibold">Total</dt>
-          <dd className="num text-base font-semibold">{formatEuros(totals.grandTotal)}</dd>
-        </div>
+      <div className="ml-auto flex h-11 items-center gap-3 rounded-lg border border-line bg-surface-sunk px-4">
+        <span className="text-xs font-medium text-ink-soft">Total</span>
+        <span className="num text-xl font-semibold -tracking-[0.02em]">
+          {formatEuros(totals.grandTotal)}
+        </span>
+      </div>
+    </footer>
+  )
+}
 
-        <div className="mt-1 flex items-baseline justify-between gap-3 border-t border-line-soft pt-2">
-          <dt className="text-xs text-faint">Coste</dt>
-          <dd className="num text-xs text-faint">{formatEuros(totals.costTotal)}</dd>
-        </div>
+function Figure({
+  label,
+  value,
+  tone = 'plain',
+  note,
+}: {
+  label: string
+  value: string
+  tone?: 'plain' | 'muted' | 'success' | 'danger'
+  note?: string
+}) {
+  const colour =
+    tone === 'muted'
+      ? 'text-muted'
+      : tone === 'success'
+        ? 'text-success'
+        : tone === 'danger'
+          ? 'text-danger'
+          : 'text-ink'
 
-        <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-xs text-faint">Margen</dt>
-          <dd
-            className={`num text-xs ${totals.margin < 0 ? 'font-medium text-danger' : 'text-faint'}`}
-          >
-            {formatEuros(totals.margin)}
-          </dd>
-        </div>
-      </dl>
+  return (
+    <div className="flex flex-col">
+      <span className="text-2xs font-medium tracking-[0.05em] text-faint uppercase">{label}</span>
+      <span className={`num text-sm font-medium ${colour}`}>{value}</span>
+      {note ? <span className="text-[10px] text-faint">{note}</span> : null}
     </div>
   )
 }

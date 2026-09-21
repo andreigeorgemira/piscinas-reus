@@ -380,86 +380,77 @@ export async function getPriceBook(
   }
 }
 
-/** How many concepts the quote editor's search offers at once. */
-export const CONCEPT_SEARCH_LIMIT = 20
-
-/** A catalogue concept as the quote editor's search offers it. */
-export type ConceptMatch = {
-  id: string
-  code: string | null
+/** One group of a book with its active concepts, for the quote editor. */
+export type BookCatalogueGroup = {
+  id: string | null
   name: string
-  description: string | null
-  unit: UnitType
-  unitCost: number
-  unitPrice: number
-  /** The group it is filed under, which the quote line copies as a snapshot. */
-  groupName: string | null
+  position: number
+  concepts: PriceBookItem[]
 }
 
-type ConceptRow = ItemRow & { price_book_groups: { name: string } | null }
-
 /**
- * Concepts matching what a staff member typed into the quote editor's search.
+ * A whole book, grouped, as the quote editor renders it.
  *
- * Retired concepts are left out, and this is the caller the comment on
- * listPriceBook refers to: the catalogue screen shows `is_active = false` rows
- * because it is where they are brought back, while a quote must not offer a
- * price the company has withdrawn. A line already written from a concept that
- * was retired afterwards is untouched -- it holds its own copy of everything
- * (0001_core_schema.sql).
+ * Retired concepts are left out: the editor must not offer a price the company
+ * has withdrawn. A line already written from one is untouched -- it holds its
+ * own copy of everything (0001_core_schema.sql) -- and the board keeps showing
+ * it, because a line that vanishes reads as deleted (src/lib/quotes/board.ts).
  *
- * An empty search returns the first page of the book rather than nothing: the
- * panel opens before anything is typed, and an empty panel teaches staff that
- * the search found nothing when in fact it was never asked.
- *
- * The group name rides along because quote_items.group_name is a snapshot the
- * line takes when it is added, and the PDF groups by it.
+ * Unpaged on purpose, unlike listPriceBook: this screen IS the catalogue, and a
+ * book split across pages cannot be ticked through. `capped` says when PostgREST's
+ * max_rows (1000, supabase/config.toml) cut the answer short, so the screen can
+ * say so instead of quietly offering less than the book holds.
  */
-export async function searchConcepts(
+export async function getBookCatalogue(
   supabase: SupabaseClient,
-  options: { priceBookId: string; search?: string | null; limit?: number },
-): Promise<ConceptMatch[]> {
-  const search = options.search?.trim() ?? ''
-  const limit = Math.max(1, Math.trunc(options.limit ?? CONCEPT_SEARCH_LIMIT))
+  priceBookId: string,
+): Promise<{ groups: BookCatalogueGroup[]; conceptCount: number; capped: boolean }> {
+  const [groupsResult, itemsResult] = await Promise.all([
+    supabase
+      .from('price_book_groups')
+      .select('id, name, position')
+      .eq('price_book_id', priceBookId)
+      .order('position')
+      .order('name'),
+    supabase
+      .from('price_book_items')
+      .select('id, group_id, code, name, description, unit, unit_cost, unit_price, is_active', {
+        count: 'exact',
+      })
+      .eq('price_book_id', priceBookId)
+      .eq('is_active', true)
+      .order('code', { nullsFirst: false })
+      .order('name'),
+  ])
 
-  let query = supabase
-    .from('price_book_items')
-    .select(
-      'id, group_id, code, name, description, unit, unit_cost, unit_price, is_active, price_book_groups(name)',
-    )
-    .eq('price_book_id', options.priceBookId)
-    .eq('is_active', true)
+  if (groupsResult.error) throw groupsResult.error
+  if (itemsResult.error) throw itemsResult.error
 
-  if (search !== '') {
-    const term = escapeFilterTerm(search)
-    query = query.or(`code.ilike."*${term}*",name.ilike."*${term}*",description.ilike."*${term}*"`)
+  const groupRows = groupsResult.data as { id: string; name: string; position: number }[]
+  const groups = new Map<string, BookCatalogueGroup>(
+    groupRows.map((row) => [row.id, { id: row.id, name: row.name, position: row.position, concepts: [] }]),
+  )
+
+  const ungrouped: PriceBookItem[] = []
+  for (const row of itemsResult.data as ItemRow[]) {
+    const item = toItem(row)
+    if (item.groupId === null) {
+      ungrouped.push(item)
+      continue
+    }
+    // Dropped when its group is gone: the two queries run together, so a group
+    // deleted between them is absent here while its items can still name it.
+    groups.get(item.groupId)?.concepts.push(item)
   }
 
-  const { data, error } = await query
-    .order('code', { nullsFirst: false })
-    .order('name')
-    .limit(limit)
+  const result = Array.from(groups.values())
+  if (ungrouped.length > 0) {
+    // Last, and named the same on screen and on the PDF (board.ts).
+    result.push({ id: null, name: UNGROUPED_NAME, position: Number.MAX_SAFE_INTEGER, concepts: ungrouped })
+  }
 
-  if (error) throw error
+  const shown = itemsResult.data.length
+  const total = itemsResult.count ?? shown
 
-  /*
-   * The cast goes through `unknown` because this project has no generated
-   * database types: supabase-js cannot know the cardinality of an embedded
-   * resource, so it infers an array, while PostgREST answers a to-one embed
-   * (a quote's client, a concept's group) with an object -- which is what the
-   * integration suite observes, e.g. the `projects` assertion in
-   * tests/integration/quote-lifecycle.test.ts. An aggregate embed like
-   * `price_book_items(count)` really is a one-element array, and those stay
-   * typed as one above.
-   */
-  return (data as unknown as ConceptRow[]).map((row) => ({
-    id: row.id,
-    code: row.code,
-    name: row.name,
-    description: row.description,
-    unit: row.unit,
-    unitCost: row.unit_cost,
-    unitPrice: row.unit_price,
-    groupName: row.price_book_groups?.name ?? null,
-  }))
+  return { groups: result, conceptCount: total, capped: shown < total }
 }

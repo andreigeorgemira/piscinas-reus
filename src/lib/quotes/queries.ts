@@ -79,6 +79,8 @@ export type QuoteItem = {
   isRecommended: boolean
   clientSelected: boolean
   position: number
+  /** When the line was written. The board orders copies and free lines by it. */
+  createdAt: string
 }
 
 /** A quote, everything on its screen, in one object. */
@@ -154,6 +156,7 @@ type ItemRow = {
   is_recommended: boolean
   client_selected: boolean
   position: number
+  created_at: string
 }
 
 function toItem(row: ItemRow): QuoteItem {
@@ -171,11 +174,12 @@ function toItem(row: ItemRow): QuoteItem {
     isRecommended: row.is_recommended,
     clientSelected: row.client_selected,
     position: row.position,
+    createdAt: row.created_at,
   }
 }
 
 const ITEM_SELECT =
-  'id, price_book_item_id, group_name, name, description, unit, quantity, unit_cost, unit_price, discount_pct, is_recommended, client_selected, position'
+  'id, price_book_item_id, group_name, name, description, unit, quantity, unit_cost, unit_price, discount_pct, is_recommended, client_selected, position, created_at'
 
 /**
  * Reads the totals of a set of quotes.
@@ -325,6 +329,27 @@ export async function listQuotes(
     pageSize,
     pageCount: Math.max(1, Math.ceil(total / pageSize)),
   }
+}
+
+/**
+ * Every line of one quote, in no particular order.
+ *
+ * The board decides the order (src/lib/quotes/board.ts), so this deliberately
+ * does not: a read that imposed `position` would make the next position depend
+ * on the last one.
+ */
+export async function listQuoteItems(
+  supabase: SupabaseClient,
+  quoteId: string,
+): Promise<QuoteItem[]> {
+  const { data, error } = await supabase
+    .from('quote_items')
+    .select(ITEM_SELECT)
+    .eq('quote_id', quoteId)
+
+  if (error) throw error
+
+  return (data as ItemRow[]).map(toItem)
 }
 
 type QuoteDetailResponse = {
