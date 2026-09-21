@@ -75,8 +75,28 @@ const quantityField = z
       .max(MAX_QUANTITY, 'La cantidad es demasiado grande.'),
   )
 
+/**
+ * A price or a cost, where leaving the box empty means zero.
+ *
+ * The price book refuses a blank figure, and rightly: a catalogue entry with no
+ * price is an entry nobody finished. A quote line is different. A one-off line
+ * written during a phone call often has no known cost yet, and a line at no
+ * charge -- included, thrown in, already paid for -- is a real thing to quote.
+ * Both are typed as an empty box, and both mean zero.
+ *
+ * Only a BLANK box means zero. 'abc' is still refused, so a mistyped figure
+ * cannot slip through as nothing.
+ */
+function moneyOrZero(label: string) {
+  return z
+    .string({ error: `El ${label} es obligatorio.` })
+    .transform((raw) => (raw.trim() === '' ? '0' : raw))
+    .pipe(moneyField(label))
+}
+
 const discountField = z
   .string({ error: 'El descuento es obligatorio.' })
+  .transform((raw) => (raw.trim() === '' ? '0' : raw))
   .transform((raw, ctx) => {
     const parsed = parseDecimal(raw)
     if (parsed === null) {
@@ -126,8 +146,8 @@ export const quoteItemInputSchema = z.object({
   description: optionalText(2000, 'La descripción no puede superar los 2000 caracteres.'),
   unit: z.enum(UNIT_TYPES, 'La unidad no es válida.'),
   quantity: quantityField,
-  unitCost: moneyField('coste'),
-  unitPrice: moneyField('precio'),
+  unitCost: moneyOrZero('coste'),
+  unitPrice: moneyOrZero('precio'),
   discountPct: discountField,
   isRecommended: z.boolean(),
 })

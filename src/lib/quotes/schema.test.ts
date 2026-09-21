@@ -161,3 +161,34 @@ describe('a quote line', () => {
     )
   })
 })
+
+describe('a line with boxes left empty', () => {
+  it('reads a blank cost, price and discount as zero', () => {
+    // The free-line form at the foot of the editor posts an empty cost every
+    // time somebody writes a one-off during a phone call, and a line at no
+    // charge is a real thing to quote.
+    const parsed = quoteItemInputSchema.safeParse(
+      quoteItemInputFromForm(
+        form({ name: 'Incluido', unit: 'unit', quantity: '1', unit_cost: '', unit_price: '', discount_pct: '' }),
+      ),
+    )
+
+    expect(parsed.success).toBe(true)
+    expect(parsed.success && parsed.data).toMatchObject({
+      unitCost: 0,
+      unitPrice: 0,
+      discountPct: 0,
+    })
+  })
+
+  it('still refuses a figure that is typed wrong rather than left out', () => {
+    const parsed = quoteItemInputSchema.safeParse(
+      quoteItemInputFromForm(form({ ...validLine, unit_price: 'ochenta' })),
+    )
+
+    expect(parsed.success).toBe(false)
+    expect(!parsed.success && parsed.error.issues[0]?.message).toBe(
+      'El precio no es un número válido.',
+    )
+  })
+})
