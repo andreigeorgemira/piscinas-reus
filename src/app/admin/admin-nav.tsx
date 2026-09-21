@@ -8,17 +8,39 @@ import { Tooltip } from '@/components/ui/tooltip'
 type NavItem = { href: string; label: string; icon: ReactNode }
 
 /**
- * No sections. Two entries do not need headings over them, and the app is
- * meant to stay small enough that they never will: the moment Clientes,
- * Presupuestos and Proyectos land they join this flat list. Only routes that
- * exist are here -- a sidebar that offers a dead link teaches staff to
- * distrust the whole thing.
+ * No sections. Four entries do not need headings over them, and the app is
+ * meant to stay small enough that they never will: the day Proyectos lands it
+ * joins this flat list. Only routes that exist are here -- a sidebar that
+ * offers a dead link teaches staff to distrust the whole thing.
+ *
+ * The order is the order of the work: a client comes in, a quote is written
+ * for them, and the tarifario is what the quote is written from.
  */
 const ITEMS: NavItem[] = [
   {
     href: '/admin',
     label: 'Panel',
     icon: <path d="M2.5 6.8 8 2.5l5.5 4.3v6.2a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8Z" />,
+  },
+  {
+    href: '/admin/clients',
+    label: 'Clientes',
+    icon: (
+      <>
+        <circle cx="8" cy="5.6" r="2.6" />
+        <path d="M3 13.4c0-2.3 2.2-3.8 5-3.8s5 1.5 5 3.8" />
+      </>
+    ),
+  },
+  {
+    href: '/admin/quotes',
+    label: 'Presupuestos',
+    icon: (
+      <>
+        <path d="M3.4 2.6h9.2v10.8H3.4Z" />
+        <path d="M5.6 5.8h4.8M5.6 8h4.8M5.6 10.2h2.8" />
+      </>
+    ),
   },
   {
     href: '/admin/price-books',
