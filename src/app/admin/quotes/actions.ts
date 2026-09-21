@@ -12,7 +12,7 @@ import {
   quoteInputSchema,
   quoteInputToRow,
 } from '@/lib/quotes/schema'
-import { QUOTE_STATUSES, type QuoteStatus } from '@/lib/quotes/status'
+import { isEditable, QUOTE_STATUSES, type QuoteStatus } from '@/lib/quotes/status'
 
 export type { ActionState }
 
@@ -84,7 +84,23 @@ export async function createQuote(
   redirect(`/admin/quotes/${data!.id}`)
 }
 
-/** The quote's own fields: client, title, dates, notes. Not its lines. */
+/**
+ * The quote's own fields: client, title, dates, notes. Not its lines.
+ *
+ * Refused unless the quote is a draft, and the check is here rather than in the
+ * database -- which is worth being explicit about, because it is the one rule on
+ * this screen that is NOT enforced by Postgres. The lines of a sent quote are
+ * frozen by a trigger (0009_quote_immutability.sql); its title, its client and
+ * the notes the PDF prints are not, so a POST straight at this endpoint could
+ * change what a client is reading while they read it. The panel hides the Editar
+ * button in the same case, but a hidden button is not a rule.
+ *
+ * A trigger on public.quotes is the better home for this, and it is a narrow
+ * one to write: it has to let set_quote_status through, since that function
+ * updates status, sent_at, responded_at and access_token on a quote that is by
+ * definition not a draft. Left for the migration that can be tested on its own
+ * rather than bundled into this screen.
+ */
 export async function updateQuote(
   _previous: ActionState,
   formData: FormData,
@@ -99,6 +115,28 @@ export async function updateQuote(
   const parsed = quoteInputSchema.safeParse(quoteInputFromForm(formData))
   if (!parsed.success) {
     return { error: firstIssue(parsed.error) }
+  }
+
+  const { data: current, error: readError } = await supabase
+    .from('quotes')
+    .select('status')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (readError) {
+    return { error: describeWriteError(readError, 'No se pudo leer el presupuesto.') }
+  }
+  // Not found and not visible are the same answer on purpose: RLS is what
+  // hides another caller's quote, and saying which it was would say whether
+  // the id exists.
+  if (!current) {
+    return { error: INVALID_ID }
+  }
+  if (!isEditable(current.status as QuoteStatus)) {
+    return {
+      error:
+        'Este presupuesto ya no es un borrador. Vuelve a borrador antes de cambiar sus datos.',
+    }
   }
 
   const { error } = await supabase.from('quotes').update(quoteInputToRow(parsed.data)).eq('id', id)

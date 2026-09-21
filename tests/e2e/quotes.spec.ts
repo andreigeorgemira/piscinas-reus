@@ -209,6 +209,9 @@ test('writes a quote from the catalogue, sends it, accepts it and reopens it', a
   await expect(page.getByRole('button', { name: `Editar ${conceptName}` })).toBeHidden()
   await expect(page.getByRole('button', { name: 'Línea libre' })).toBeHidden()
   await expect(page.getByText('congeladas')).toBeVisible()
+  // The quote's own fields go with the lines: the title and the notes are what
+  // the client is reading, so they stop being editable at the same moment.
+  await expect(panel.getByRole('button', { name: 'Editar' })).toBeHidden()
 
   // Accepting creates the project, which is what makes a quote work rather than
   // paperwork. The dialog says so before it happens.
