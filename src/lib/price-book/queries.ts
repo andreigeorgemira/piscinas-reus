@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { escapeFilterTerm } from '@/lib/supabase/filters'
 import type { UnitType } from './schema'
 
 /** The only Spanish string in this module: the label for items with no group. */
@@ -150,23 +151,6 @@ function toItem(row: ItemRow): PriceBookItem {
   }
 }
 
-/**
- * Wraps a search term for use inside a PostgREST `or` filter.
- *
- * That filter is a comma-separated string, so a search for "gresite, borada"
- * would otherwise be parsed as two conditions and the second one - `borada`,
- * with no column or operator - makes the whole request a 400. Parentheses
- * group conditions and would do the same. PostgREST's own answer is to
- * double-quote the value, which makes every reserved character literal; only
- * the backslash and the quote itself then need escaping.
- *
- * `*` is left alone deliberately: it is the ilike wildcard, and a staff
- * member typing `REV-*` meaning "everything in revestimiento" gets what they
- * asked for.
- */
-function quoteFilterValue(term: string): string {
-  return term.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-}
 
 /**
  * Reads one page of the price book as the grouped catalogue the admin screen
@@ -212,7 +196,7 @@ export async function listPriceBook(
     .eq('price_book_id', filter.priceBookId)
 
   if (search !== '') {
-    const term = quoteFilterValue(search)
+    const term = escapeFilterTerm(search)
     itemsQuery = itemsQuery.or(
       `code.ilike."*${term}*",name.ilike."*${term}*",description.ilike."*${term}*"`,
     )
@@ -394,4 +378,88 @@ export async function getPriceBook(
     groupCount: row.price_book_groups[0]?.count ?? 0,
     itemCount: row.price_book_items[0]?.count ?? 0,
   }
+}
+
+/** How many concepts the quote editor's search offers at once. */
+export const CONCEPT_SEARCH_LIMIT = 20
+
+/** A catalogue concept as the quote editor's search offers it. */
+export type ConceptMatch = {
+  id: string
+  code: string | null
+  name: string
+  description: string | null
+  unit: UnitType
+  unitCost: number
+  unitPrice: number
+  /** The group it is filed under, which the quote line copies as a snapshot. */
+  groupName: string | null
+}
+
+type ConceptRow = ItemRow & { price_book_groups: { name: string } | null }
+
+/**
+ * Concepts matching what a staff member typed into the quote editor's search.
+ *
+ * Retired concepts are left out, and this is the caller the comment on
+ * listPriceBook refers to: the catalogue screen shows `is_active = false` rows
+ * because it is where they are brought back, while a quote must not offer a
+ * price the company has withdrawn. A line already written from a concept that
+ * was retired afterwards is untouched -- it holds its own copy of everything
+ * (0001_core_schema.sql).
+ *
+ * An empty search returns the first page of the book rather than nothing: the
+ * panel opens before anything is typed, and an empty panel teaches staff that
+ * the search found nothing when in fact it was never asked.
+ *
+ * The group name rides along because quote_items.group_name is a snapshot the
+ * line takes when it is added, and the PDF groups by it.
+ */
+export async function searchConcepts(
+  supabase: SupabaseClient,
+  options: { priceBookId: string; search?: string | null; limit?: number },
+): Promise<ConceptMatch[]> {
+  const search = options.search?.trim() ?? ''
+  const limit = Math.max(1, Math.trunc(options.limit ?? CONCEPT_SEARCH_LIMIT))
+
+  let query = supabase
+    .from('price_book_items')
+    .select(
+      'id, group_id, code, name, description, unit, unit_cost, unit_price, is_active, price_book_groups(name)',
+    )
+    .eq('price_book_id', options.priceBookId)
+    .eq('is_active', true)
+
+  if (search !== '') {
+    const term = escapeFilterTerm(search)
+    query = query.or(`code.ilike."*${term}*",name.ilike."*${term}*",description.ilike."*${term}*"`)
+  }
+
+  const { data, error } = await query
+    .order('code', { nullsFirst: false })
+    .order('name')
+    .limit(limit)
+
+  if (error) throw error
+
+  /*
+   * The cast goes through `unknown` because this project has no generated
+   * database types: supabase-js cannot know the cardinality of an embedded
+   * resource, so it infers an array, while PostgREST answers a to-one embed
+   * (a quote's client, a concept's group) with an object -- which is what the
+   * integration suite observes, e.g. the `projects` assertion in
+   * tests/integration/quote-lifecycle.test.ts. An aggregate embed like
+   * `price_book_items(count)` really is a one-element array, and those stay
+   * typed as one above.
+   */
+  return (data as unknown as ConceptRow[]).map((row) => ({
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    description: row.description,
+    unit: row.unit,
+    unitCost: row.unit_cost,
+    unitPrice: row.unit_price,
+    groupName: row.price_book_groups?.name ?? null,
+  }))
 }

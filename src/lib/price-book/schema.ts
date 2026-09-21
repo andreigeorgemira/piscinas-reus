@@ -29,8 +29,14 @@ const MAX_MONEY = 9_999_999.99
  * and leaves as a number. Rejecting rather than rounding a third decimal is
  * deliberate: silently rounding would charge a different amount than what
  * was typed with nothing on screen saying so (see decimal.ts).
+ *
+ * Exported because a quote line's cost and price are the same kind of number,
+ * typed on the same keyboard, and refused in the same words
+ * (src/lib/quotes/schema.ts). A second copy of this field would be a second
+ * set of messages to keep in step, and the first divergence would be a form
+ * that accepts three decimals on one screen and refuses them on the next.
  */
-function moneyField(label: string) {
+export function moneyField(label: string) {
   return z
     .string({ error: `El ${label} es obligatorio.` })
     .transform((raw, ctx) => {
