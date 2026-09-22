@@ -160,8 +160,28 @@ export function BoardRow({
     })
   }
 
-  const total = line ? lineTotal(line) : 0
+  const total = line ? lineTotal(line) : lineTotal({
+    quantity: 1,
+    unitPrice: concept?.unitPrice ?? 0,
+    discountPct: 0,
+  })
   const busy = pending || saving
+
+  /**
+   * A row shows its whole set of fields whether or not the quote uses it, and
+   * dims the ones that are not in play.
+   *
+   * Ticking a concept then changes nothing but the opacity and the disabled
+   * flag: the boxes were already drawn, in the same place, holding what the
+   * tariff says the line would be. The earlier version rendered them only for
+   * chosen rows, so every tick rebuilt half the row and the table flickered
+   * under the pointer.
+   */
+  const fieldTone = chosen ? '' : 'opacity-45'
+  const fieldsDisabled = !editable || !chosen
+  const quantityValue = line ? formatQuantity(line.quantity) : '1'
+  const priceValue = formatMoney(line ? line.unitPrice : (concept?.unitPrice ?? 0))
+  const discountValue = line && line.discountPct > 0 ? formatQuantity(line.discountPct) : ''
 
   return (
     <>
@@ -242,124 +262,114 @@ export function BoardRow({
         </td>
 
         <td className={`${CELL_CLASS} text-right`}>
-          {chosen ? (
-            <label className={`${NUMBER_FIELD_CLASS} relative pr-1`}>
-              <span className="sr-only">{`Cantidad de ${name}`}</span>
-              <input
-                form={formId}
-                name="quantity"
-                inputMode="decimal"
-                defaultValue={formatQuantity(line.quantity)}
-                disabled={!editable}
-                onBlur={(event) => saveIfChanged(event.currentTarget.form)}
-                className={`${NUMBER_INPUT_CLASS} w-12 font-medium`}
-              />
-              {/*
-                The unit belongs to THIS line, not to the catalogue: quote_items
-                copies it (0001_core_schema.sql), so changing it here prices one
-                job in hours without touching the tariff everyone else quotes
-                from. Bare, with no border of its own, so the pair reads as one
-                measurement rather than two controls.
-              */}
-              <select
-                form={formId}
-                name="unit"
-                defaultValue={unit}
-                disabled={!editable}
-                onChange={(event) => saveIfChanged(event.currentTarget.form)}
-                aria-label={`Unidad de ${name}`}
-                className="num cursor-pointer appearance-none bg-transparent text-2xs text-muted outline-none focus-visible:text-ink disabled:cursor-default"
-              >
-                {UNIT_TYPES.map((option) => (
-                  <option key={option} value={option}>
-                    {UNIT_LABELS[option]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <span className="num text-xs text-faint">—</span>
-          )}
-        </td>
-
-        <td className={`${CELL_CLASS} text-right`}>
-          {chosen ? (
-            <label className={NUMBER_FIELD_CLASS}>
-              <span className="sr-only">{`Precio de ${name}`}</span>
-              <input
-                form={formId}
-                name="unit_price"
-                inputMode="decimal"
-                defaultValue={formatMoney(line.unitPrice)}
-                disabled={!editable}
-                onBlur={(event) => saveIfChanged(event.currentTarget.form)}
-                className={`${NUMBER_INPUT_CLASS} w-16`}
-              />
-              <span aria-hidden="true" className="text-2xs text-faint">
-                €
-              </span>
-            </label>
-          ) : (
-            <span className="num text-xs text-muted">
-              {concept ? formatEuros(concept.unitPrice) : '—'}
-            </span>
-          )}
-        </td>
-
-        <td className={`${CELL_CLASS} text-right`}>
-          {chosen ? (
-            <label
-              className={`${NUMBER_FIELD_CLASS} ${line.discountPct > 0 ? 'border-warn/40 bg-warn-soft' : ''}`}
+          <label className={`${NUMBER_FIELD_CLASS} relative pr-1 ${fieldTone}`}>
+            <span className="sr-only">{`Cantidad de ${name}`}</span>
+            <input
+              form={formId}
+              name="quantity"
+              inputMode="decimal"
+              defaultValue={quantityValue}
+              disabled={fieldsDisabled}
+              onBlur={(event) => saveIfChanged(event.currentTarget.form)}
+              className={`${NUMBER_INPUT_CLASS} w-12 font-medium`}
+            />
+            {/*
+              The unit belongs to THIS line, not to the catalogue: quote_items
+              copies it (0001_core_schema.sql), so changing it here prices one
+              job in hours without touching the tariff everyone else quotes
+              from. Bare, with no border of its own, so the pair reads as one
+              measurement rather than two controls.
+            */}
+            <select
+              form={formId}
+              name="unit"
+              defaultValue={unit}
+              disabled={fieldsDisabled}
+              onChange={(event) => saveIfChanged(event.currentTarget.form)}
+              aria-label={`Unidad de ${name}`}
+              className="num cursor-pointer appearance-none bg-transparent text-2xs text-muted outline-none focus-visible:text-ink disabled:cursor-default"
             >
-              <span className="sr-only">{`Descuento de ${name}`}</span>
-              {/*
-                Blank rather than '0' when there is no discount: a column of
-                zeros is a column that says nothing, and the schema reads an
-                empty box as zero.
-              */}
-              <input
-                form={formId}
-                name="discount_pct"
-                inputMode="decimal"
-                defaultValue={line.discountPct > 0 ? formatQuantity(line.discountPct) : ''}
-                placeholder="0"
-                disabled={!editable}
-                onBlur={(event) => saveIfChanged(event.currentTarget.form)}
-                className={`${NUMBER_INPUT_CLASS} w-8 ${line.discountPct > 0 ? 'text-warn' : 'text-muted'}`}
-              />
-              <span aria-hidden="true" className="text-2xs text-faint">
-                %
-              </span>
-            </label>
-          ) : null}
+              {UNIT_TYPES.map((option) => (
+                <option key={option} value={option}>
+                  {UNIT_LABELS[option]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </td>
+
+        <td className={`${CELL_CLASS} text-right`}>
+          <label className={`${NUMBER_FIELD_CLASS} ${fieldTone}`}>
+            <span className="sr-only">{`Precio de ${name}`}</span>
+            <input
+              form={formId}
+              name="unit_price"
+              inputMode="decimal"
+              defaultValue={priceValue}
+              disabled={fieldsDisabled}
+              onBlur={(event) => saveIfChanged(event.currentTarget.form)}
+              className={`${NUMBER_INPUT_CLASS} w-16`}
+            />
+            <span aria-hidden="true" className="text-2xs text-faint">
+              €
+            </span>
+          </label>
+        </td>
+
+        <td className={`${CELL_CLASS} text-right`}>
+          <label
+            className={`${NUMBER_FIELD_CLASS} ${fieldTone} ${
+              line && line.discountPct > 0 ? 'border-warn/40 bg-warn-soft' : ''
+            }`}
+          >
+            <span className="sr-only">{`Descuento de ${name}`}</span>
+            {/*
+              Blank rather than '0' when there is no discount: a column of zeros
+              is a column that says nothing, and the schema reads an empty box as
+              zero.
+            */}
+            <input
+              form={formId}
+              name="discount_pct"
+              inputMode="decimal"
+              defaultValue={discountValue}
+              placeholder="0"
+              disabled={fieldsDisabled}
+              onBlur={(event) => saveIfChanged(event.currentTarget.form)}
+              className={`${NUMBER_INPUT_CLASS} w-8 ${
+                line && line.discountPct > 0 ? 'text-warn' : 'text-muted'
+              }`}
+            />
+            <span aria-hidden="true" className="text-2xs text-faint">
+              %
+            </span>
+          </label>
         </td>
 
         <td
-          className={`${CELL_CLASS} num text-right text-sm ${chosen ? 'font-medium' : ''} ${optional ? 'text-muted' : 'text-ink'}`}
+          className={`${CELL_CLASS} num text-right text-sm ${chosen ? 'font-medium' : fieldTone} ${optional ? 'text-muted' : 'text-ink'}`}
         >
-          {chosen ? formatEuros(total) : ''}
+          {formatEuros(total)}
         </td>
 
         <td className={`${CELL_CLASS} text-center`}>
-          {chosen ? (
-            /*
-              One checkbox, at the end of the row, in place of the Base |
-              Opcional switch that used to sit in the middle of it. Everything a
-              quote carries is part of the price; an extra is the exception, and
-              an exception is a box you tick, not a state you pick between two
-              named halves.
-            */
-            <label className="inline-flex items-center justify-center">
-              <span className="sr-only">{`Marcar ${name} como extra opcional`}</span>
-              <input
-                type="checkbox"
-                checked={optimisticOptional}
-                disabled={!editable}
-                onChange={(event) => runKind(event.target.checked ? 'optional' : 'base')}
-                className="size-4 accent-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
-              />
-            </label>
-          ) : null}
+          {/*
+            One checkbox, at the end of the row, in place of the Base | Opcional
+            switch that used to sit in the middle of it. Everything a quote
+            carries is part of the price; an extra is the exception, and an
+            exception is a box you tick, not a state you pick between two named
+            halves.
+          */}
+          <label className={`inline-flex items-center justify-center ${fieldTone}`}>
+            <span className="sr-only">{`Marcar ${name} como extra opcional`}</span>
+            <input
+              type="checkbox"
+              checked={optimisticOptional}
+              disabled={fieldsDisabled}
+              onChange={(event) => runKind(event.target.checked ? 'optional' : 'base')}
+              className="size-4 accent-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+            />
+          </label>
         </td>
 
         <td className={CELL_CLASS}>

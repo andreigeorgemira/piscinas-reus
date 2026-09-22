@@ -9,10 +9,12 @@ import { getBookCatalogue, listPriceBooks } from '@/lib/price-book/queries'
 import { buildBoard } from '@/lib/quotes/board'
 import { getQuote } from '@/lib/quotes/queries'
 import { isEditable } from '@/lib/quotes/status'
+import { BookSelect } from '@/app/admin/quotes/book-select'
 import { GroupCard } from './group-card'
 import { DeleteQuoteButton } from './quote-actions'
 import { QuoteDetailsButton } from './quote-details'
 import { QuoteTotalsBar } from './quote-totals'
+import { SaveNowButton } from './save-now'
 
 export const metadata: Metadata = { title: 'Presupuesto' }
 
@@ -215,59 +217,20 @@ export default async function QuoteEditorPage({
           </Link>
         </div>
 
-        {/*
-          One link per book, not a select: the editor is server-rendered and a
-          book is a place -- an address worth sending to someone. With one book
-          there is nothing to choose, so nothing is shown, and the buttons carry
-          the books' own names rather than a "Tarifario" label in front of them:
-          this strip has to stay on one line.
-        */}
         {books.length > 1 ? (
-          <div className="flex items-center gap-1.5">
-            {books.map((candidate) => (
-              <Link
-                key={candidate.id}
-                href={href({ book: candidate.id })}
-                aria-current={candidate.id === book?.id ? 'true' : undefined}
-                className={`flex h-9 items-center rounded-lg border px-3 text-xs transition-colors ${
-                  candidate.id === book?.id
-                    ? 'border-accent/40 bg-accent-soft font-medium text-accent'
-                    : 'border-line bg-surface text-muted hover:bg-surface-hover'
-                }`}
-              >
-                {candidate.name}
-              </Link>
-            ))}
-          </div>
+          <BookSelect
+            books={books.map((candidate) => ({
+              id: candidate.id,
+              name: candidate.name,
+              href: href({ book: candidate.id }),
+            }))}
+            value={book?.id ?? ''}
+          />
         ) : null}
 
         <span className="ml-auto" />
 
-        {/*
-          There is no Guardar button because there is nothing to save: every box
-          writes when you leave it. Saying so is the difference between a screen
-          that feels automatic and one that feels like it lost your work.
-        */}
-        <span
-          title="Cada cambio se guarda al salir del campo. No hay botón de guardar."
-          className="flex items-center gap-1.5 text-xs text-muted"
-        >
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.9"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-success"
-            aria-hidden="true"
-          >
-            <path d="m3.2 8.4 3.2 3.2 6.4-6.8" />
-          </svg>
-          Se guarda solo
-        </span>
+        <SaveNowButton />
 
         <DeleteQuoteButton quote={quote} />
       </div>
