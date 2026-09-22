@@ -69,7 +69,15 @@ test.beforeAll(async () => {
 
   const { data: group, error: groupError } = await admin
     .from('price_book_groups')
-    .insert({ price_book_id: book.id, name: partidaName, position: 900 })
+    /*
+     * position 990, not 900: the price-book spec's drag test creates its own two
+     * groups at 900 and 901, and a group of this file's at 900 sorted BETWEEN
+     * them -- with a row in it, right under the row that test picks up. The drag
+     * then started on the wrong handle and the whole test failed, but only in the
+     * full suite, where both files' fixtures are in the same catalogue at once.
+     * Each file keeps its own band.
+     */
+    .insert({ price_book_id: book.id, name: partidaName, position: 990 })
     .select('id')
     .single()
   if (groupError) throw groupError
