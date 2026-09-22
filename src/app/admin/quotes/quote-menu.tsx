@@ -131,6 +131,16 @@ export function QuoteMenu({
             Copiar enlace del cliente
           </button>
 
+          {quote.status !== 'draft' ? (
+            <a href={quote.publicUrl} target="_blank" rel="noreferrer" className={ITEM_CLASS}>
+              <svg {...ICON_PROPS}>
+                <path d="M3 8s2-3.6 5-3.6S13 8 13 8s-2 3.6-5 3.6S3 8 3 8Z" />
+                <circle cx="8" cy="8" r="1.4" />
+              </svg>
+              Ver la página del cliente
+            </a>
+          ) : null}
+
           <a
             href={`/admin/quotes/${quote.id}/pdf`}
             target="_blank"

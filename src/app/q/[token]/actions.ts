@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import type { ActionState } from '@/app/admin/action-state'
+import { isPngDataUrl } from '@/lib/quotes/signature'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 export type { ActionState }
@@ -87,12 +88,11 @@ export async function acceptQuote(
   }
 
   const signature = String(formData.get('signature') ?? '')
-  // The column takes 300 kB (0015). A pad this size draws far less; anything
-  // bigger is not a signature and is dropped rather than refused, so a slow
-  // phone cannot lose an acceptance over a drawing.
-  const image = signature.startsWith('data:image/png;base64,') && signature.length <= 280_000
-    ? signature
-    : null
+  // Checked to the byte, not by its prefix: a value that only looks like a PNG
+  // makes the PDF renderer hang rather than fail (src/lib/quotes/signature.ts).
+  // Dropped rather than refused, so a slow phone cannot lose an acceptance over
+  // a drawing.
+  const image = isPngDataUrl(signature, 280_000) ? signature : null
 
   const userAgent = (await headers()).get('user-agent') ?? ''
 

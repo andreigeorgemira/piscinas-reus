@@ -6,6 +6,7 @@ import { formatEuros } from '@/lib/price-book/decimal'
 import { UNIT_LABELS } from '@/lib/price-book/schema'
 import { formatQuantity } from './quantity'
 import { formatSpanishDate, type PublicQuote, UNGROUPED_SECTION } from './public'
+import { isPngDataUrl } from './signature'
 import type { QuoteDetail } from './queries'
 
 /**
@@ -436,7 +437,15 @@ export function fromQuoteDetail(
     baseTotal: quote.totals.baseTotal,
     selectedExtrasTotal: quote.totals.selectedExtrasTotal,
     grandTotal: quote.totals.grandTotal,
-    signature: signature?.name ? { name: signature.name, at: signature.at, image: signature.image } : null,
+    signature: signature?.name
+      ? {
+          name: signature.name,
+          at: signature.at,
+          // A stored value that is not really a PNG would hang the renderer
+          // rather than fail it; the document goes out without the drawing.
+          image: isPngDataUrl(signature.image) ? signature.image : null,
+        }
+      : null,
     draft: quote.status === 'draft',
   }
 }
