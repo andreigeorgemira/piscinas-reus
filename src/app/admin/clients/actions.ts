@@ -9,10 +9,23 @@ import {
   clientInputFromForm,
   clientInputSchema,
   clientInputToRow,
+  fieldIssues,
   firstIssue,
 } from '@/lib/clients/schema'
 
 export type { ActionState }
+
+/**
+ * What the client form answers with.
+ *
+ * `created` rides back because of where this form is opened from: a dialog on
+ * top of the quote dialog, whose whole point is that the client it just created
+ * ends up selected without anybody visiting the clients screen. An edit leaves
+ * it absent -- the caller already had the client.
+ */
+export type ClientFormState = ActionState & {
+  created?: { id: string; fullName: string }
+}
 
 const INVALID_ID = 'El cliente no es válido.'
 
@@ -39,29 +52,34 @@ function describeWriteError(error: PostgrestError): string {
 }
 
 export async function createClient(
-  _previous: ActionState,
+  _previous: ClientFormState,
   formData: FormData,
-): Promise<ActionState> {
+): Promise<ClientFormState> {
   const supabase = await requireAdmin()
 
   const parsed = clientInputSchema.safeParse(clientInputFromForm(formData))
   if (!parsed.success) {
-    return { error: firstIssue(parsed.error) }
+    return { error: firstIssue(parsed.error), fields: fieldIssues(parsed.error) }
   }
 
-  const { error } = await supabase.from('clients').insert(clientInputToRow(parsed.data))
+  const { data, error } = await supabase
+    .from('clients')
+    .insert(clientInputToRow(parsed.data))
+    .select('id, full_name')
+    .single()
+
   if (error) {
     return { error: describeWriteError(error) }
   }
 
   revalidatePath('/admin/clients')
-  return { error: null }
+  return { error: null, created: { id: data!.id, fullName: data!.full_name } }
 }
 
 export async function updateClient(
-  _previous: ActionState,
+  _previous: ClientFormState,
   formData: FormData,
-): Promise<ActionState> {
+): Promise<ClientFormState> {
   const supabase = await requireAdmin()
 
   const id = readUuid(formData, 'id')
@@ -71,7 +89,7 @@ export async function updateClient(
 
   const parsed = clientInputSchema.safeParse(clientInputFromForm(formData))
   if (!parsed.success) {
-    return { error: firstIssue(parsed.error) }
+    return { error: firstIssue(parsed.error), fields: fieldIssues(parsed.error) }
   }
 
   const { error } = await supabase

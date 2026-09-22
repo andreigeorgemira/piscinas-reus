@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import { parseDecimal } from '@/lib/price-book/decimal'
-import { firstIssue, moneyField, UNIT_TYPES } from '@/lib/price-book/schema'
+import { fieldIssues, firstIssue, moneyField, UNIT_TYPES } from '@/lib/price-book/schema'
 import { hasMoreThanThreeDecimals } from './quantity'
 
-export { firstIssue }
+export { fieldIssues, firstIssue }
 
 /**
  * What a Server Action is allowed to believe about a quote and its lines.
@@ -114,7 +114,17 @@ const discountField = z
 
 /** The quote itself: who it is for, what it is called, and its dates. */
 export const quoteInputSchema = z.object({
-  clientId: z.uuid('El cliente no es válido.'),
+  /**
+   * Optional, since 0014_quote_without_client.sql.
+   *
+   * A price is quoted over the phone before anybody has taken a name down, and
+   * demanding the client first put the paperwork in front of the work. The
+   * database refuses the one moment that genuinely needs a client -- acceptance,
+   * where the quote becomes a project.
+   */
+  clientId: z
+    .union([z.literal(''), z.null(), z.uuid('El cliente no es válido.')])
+    .transform((value) => (value === '' ? null : value)),
   title: z
     .string({ error: 'El título es obligatorio.' })
     .trim()

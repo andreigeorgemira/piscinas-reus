@@ -13,6 +13,18 @@
  * when the client and quote screens needed the same type. That file still
  * re-exports it, so the price-book screens are untouched.
  */
-export type ActionState = { error: string | null }
+export type ActionState = {
+  /** What went wrong, in one sentence, for a form that shows one message. */
+  error: string | null
+  /**
+   * The same failure told field by field, keyed by the field's name in the
+   * schema (`clientId`, not `client_id`).
+   *
+   * A dialog with six inputs cannot say "revisa los datos" and leave the person
+   * hunting: the box that is wrong has to say so itself. Forms that carry a
+   * single control ignore this and read `error` alone.
+   */
+  fields?: Record<string, string>
+}
 
 export const idleState: ActionState = { error: null }

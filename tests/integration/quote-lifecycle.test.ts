@@ -203,6 +203,66 @@ describe('set_quote_status', () => {
   })
 })
 
+describe('a quote with no client', () => {
+  it('can be written', async () => {
+    // client_id stopped being not null in 0014_quote_without_client.sql: the
+    // price is quoted before anybody has taken a name down.
+    const { data, error } = await staff
+      .from('quotes')
+      .insert({ title: 'Llamada sin nombre' })
+      .select('id, reference, client_id')
+      .single()
+
+    expect(error).toBeNull()
+    expect(data!.client_id).toBeNull()
+    expect(data!.reference).toMatch(new RegExp(`^Q-${YEAR}-\\d{4}$`))
+  })
+
+  it('can be sent and rejected, but not accepted', async () => {
+    const { data } = await staff
+      .from('quotes')
+      .insert({ title: 'Sin cliente, enviada' })
+      .select('id')
+      .single()
+    const quoteId = data!.id
+
+    const sent = await staff.rpc('set_quote_status', { p_quote_id: quoteId, p_status: 'sent' })
+    expect(sent.error).toBeNull()
+
+    // Accepting is where a quote becomes a project, and projects.client_id is
+    // not null: there is no such thing as work for nobody.
+    const accepted = await staff.rpc('set_quote_status', {
+      p_quote_id: quoteId,
+      p_status: 'accepted',
+    })
+    expect(accepted.error?.code).toBe('P0001')
+    expect(accepted.error?.message).toContain('has no client')
+
+    const rejected = await staff.rpc('set_quote_status', {
+      p_quote_id: quoteId,
+      p_status: 'rejected',
+    })
+    expect(rejected.error).toBeNull()
+  })
+
+  it('is invisible to a signed-in customer, like every quote that is not theirs', async () => {
+    const { data } = await staff
+      .from('quotes')
+      .insert({ title: 'Sin cliente, ajena' })
+      .select('id')
+      .single()
+    await staff.rpc('set_quote_status', { p_quote_id: data!.id, p_status: 'sent' })
+
+    // The client-facing view filters on `client_id = current_client_id()`, and a
+    // null equals nothing -- so an unassigned quote is hidden by the same rule
+    // that hides other people's, not by a new exception.
+    const { data: visible, error } = await client.from('client_quotes').select('id')
+
+    expect(error).toBeNull()
+    expect((visible as { id: string }[]).some((row) => row.id === data!.id)).toBe(false)
+  })
+})
+
 describe('who may move a quote', () => {
   it('refuses a signed-in client, who cannot even see the quote', async () => {
     const quote = await newQuote('Ajena')

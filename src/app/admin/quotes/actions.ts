@@ -7,6 +7,7 @@ import type { ActionState } from '@/app/admin/action-state'
 import { readUuid } from '@/app/admin/form-values'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import {
+  fieldIssues,
   firstIssue,
   quoteInputFromForm,
   quoteInputSchema,
@@ -66,7 +67,9 @@ export async function createQuote(
 
   const parsed = quoteInputSchema.safeParse(quoteInputFromForm(formData))
   if (!parsed.success) {
-    return { error: firstIssue(parsed.error) }
+    // Field by field, so the dialog can mark the box that is wrong instead of
+    // printing one sentence over six inputs and clearing them all.
+    return { error: firstIssue(parsed.error), fields: fieldIssues(parsed.error) }
   }
 
   const { data, error } = await supabase
@@ -80,7 +83,9 @@ export async function createQuote(
   }
 
   revalidatePath('/admin/quotes')
-  revalidatePath(`/admin/clients/${parsed.data.clientId}`)
+  if (parsed.data.clientId) {
+    revalidatePath(`/admin/clients/${parsed.data.clientId}`)
+  }
   redirect(`/admin/quotes/${data!.id}`)
 }
 
@@ -114,7 +119,7 @@ export async function updateQuote(
 
   const parsed = quoteInputSchema.safeParse(quoteInputFromForm(formData))
   if (!parsed.success) {
-    return { error: firstIssue(parsed.error) }
+    return { error: firstIssue(parsed.error), fields: fieldIssues(parsed.error) }
   }
 
   const { data: current, error: readError } = await supabase
@@ -179,6 +184,15 @@ export async function moveQuoteStatus(
   })
 
   if (error) {
+    // The one P0001 from set_quote_status worth its own sentence: accepting is
+    // where a quote becomes a project, and a project belongs to somebody
+    // (0014_quote_without_client.sql).
+    if (error.message.includes('has no client')) {
+      return {
+        error:
+          'Asigna un cliente antes de aceptarlo: al aceptar nace el proyecto, y un proyecto es de alguien.',
+      }
+    }
     return {
       error: describeWriteError(error, 'Ese cambio de estado no es posible desde el estado actual.'),
     }

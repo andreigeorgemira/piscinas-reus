@@ -114,7 +114,9 @@ export function QuoteActions({ quote }: { quote: QuoteDetail }) {
         open={confirmingDelete}
         onOpenChange={setConfirmingDelete}
         title={`Borrar ${quote.reference}`}
-        description={`«${quote.title}», de ${quote.client.fullName}.`}
+        description={
+          quote.client ? `«${quote.title}», de ${quote.client.fullName}.` : `«${quote.title}».`
+        }
         risks={[
           `Se borran sus ${quote.items.length} ${quote.items.length === 1 ? 'línea' : 'líneas'}. No se puede deshacer.`,
           'El enlace público deja de funcionar.',

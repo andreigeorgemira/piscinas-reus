@@ -37,9 +37,15 @@ export function QuoteRow({ quote }: { quote: QuoteListRow }) {
         </div>
       </td>
       <td className={CELL_CLASS}>
-        <span className="block truncate" title={quote.clientName}>
-          {quote.clientName}
-        </span>
+        {quote.clientName ? (
+          <span className="block truncate" title={quote.clientName}>
+            {quote.clientName}
+          </span>
+        ) : (
+          /* A quote written before anybody took a name down. Said out loud, so
+             the empty cell is not read as a name the screen lost. */
+          <span className="text-xs text-faint italic">Sin cliente</span>
+        )}
       </td>
       <td className={CELL_CLASS}>
         <StatusBadge status={quote.status} />

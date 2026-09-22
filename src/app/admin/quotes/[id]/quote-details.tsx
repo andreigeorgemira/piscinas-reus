@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { idleState, type ActionState } from '@/app/admin/action-state'
 import { FIELD_CLASS, HEADER_BUTTON_CLASS } from '@/app/admin/price-book/ui'
 import { updateQuote } from '@/app/admin/quotes/actions'
+import { ClientPicker } from '@/app/admin/quotes/client-picker'
 import type { ClientOption } from '@/lib/clients/queries'
 import type { QuoteDetail } from '@/lib/quotes/queries'
 
@@ -34,12 +35,13 @@ export function QuoteDetailsButton({
   editable: boolean
 }) {
   const [open, setOpen] = useState(false)
-  const clientId = useId()
   const titleId = useId()
   const startId = useId()
   const validId = useId()
   const clientNotesId = useId()
   const internalNotesId = useId()
+
+  const fieldsOf = (value: ActionState) => value.fields ?? {}
 
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     async (previous, formData) => {
@@ -52,6 +54,8 @@ export function QuoteDetailsButton({
     },
     idleState,
   )
+
+  const fields = fieldsOf(state)
 
   return (
     <>
@@ -92,6 +96,9 @@ export function QuoteDetailsButton({
               <div className="flex flex-col gap-1.5">
                 <label htmlFor={titleId} className={LABEL_CLASS}>
                   Título
+                  <span className="text-danger" title="Obligatorio">
+                    {' *'}
+                  </span>
                 </label>
                 <input
                   id={titleId}
@@ -100,38 +107,29 @@ export function QuoteDetailsButton({
                   maxLength={200}
                   disabled={!editable}
                   autoFocus
-                  className={`${FIELD_CLASS} h-9`}
+                  aria-invalid={fields.title ? true : undefined}
+                  className={`${FIELD_CLASS} h-9 ${fields.title ? 'border-danger' : ''}`}
                 />
+                {fields.title ? <p className="text-2xs text-danger">{fields.title}</p> : null}
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor={clientId} className={LABEL_CLASS}>
-                  Cliente
-                </label>
-                <select
-                  id={clientId}
-                  name="client_id"
-                  defaultValue={quote.client.id}
-                  disabled={!editable}
-                  className={`${FIELD_CLASS} h-9 cursor-pointer`}
-                >
-                  {/*
-                    The current client is always an option even when the list is
-                    capped (listClientOptions stops at 100): a select whose value
-                    is missing posts the first option instead, which would move
-                    the quote to whoever sorts first.
-                  */}
-                  {clients.some((option) => option.id === quote.client.id) ? null : (
-                    <option value={quote.client.id}>{quote.client.fullName}</option>
-                  )}
-                  {clients.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.fullName}
-                      {option.city ? ` · ${option.city}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {editable ? (
+                <ClientPicker
+                  clients={clients}
+                  defaultClient={
+                    quote.client ? { id: quote.client.id, fullName: quote.client.fullName } : null
+                  }
+                  error={fields.clientId}
+                  hint="Opcional. Hace falta para aceptarlo: al aceptar nace el proyecto."
+                />
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <span className={LABEL_CLASS}>Cliente</span>
+                  <span className="text-sm">
+                    {quote.client ? quote.client.fullName : 'Sin cliente'}
+                  </span>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
@@ -200,24 +198,29 @@ export function QuoteDetailsButton({
                 </p>
               ) : null}
 
-              <div className="flex justify-end gap-2 pt-1">
-                <DialogPrimitive.Close asChild>
-                  <button
-                    type="button"
-                    className="flex h-8 items-center rounded-md border border-line bg-surface px-3 text-xs font-medium text-ink-soft hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                  >
-                    {editable ? 'Cancelar' : 'Cerrar'}
-                  </button>
-                </DialogPrimitive.Close>
-                {editable ? (
-                  <button
-                    type="submit"
-                    disabled={pending}
-                    className="flex h-8 items-center rounded-md border border-ink bg-ink px-3 text-xs font-medium text-canvas hover:bg-ink-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
-                  >
-                    {pending ? 'Guardando…' : 'Guardar'}
-                  </button>
-                ) : null}
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-2xs text-faint">
+                  <span className="text-danger">*</span> obligatorio
+                </span>
+                <div className="ml-auto flex gap-2">
+                  <DialogPrimitive.Close asChild>
+                    <button
+                      type="button"
+                      className="flex h-8 items-center rounded-md border border-line bg-surface px-3 text-xs font-medium text-ink-soft hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      {editable ? 'Cancelar' : 'Cerrar'}
+                    </button>
+                  </DialogPrimitive.Close>
+                  {editable ? (
+                    <button
+                      type="submit"
+                      disabled={pending}
+                      className="flex h-8 items-center rounded-md border border-ink bg-ink px-3 text-xs font-medium text-canvas hover:bg-ink-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
+                    >
+                      {pending ? 'Guardando…' : 'Guardar'}
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </form>
           </DialogPrimitive.Content>

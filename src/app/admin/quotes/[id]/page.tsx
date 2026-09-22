@@ -109,12 +109,18 @@ export default async function QuoteEditorPage({
           <span className="flex items-center gap-2">
             <StatusBadge status={quote.status} />
             <span className="max-w-[22rem] truncate text-ink-soft">{quote.title}</span>
-            <Link
-              href={`/admin/clients/${quote.client.id}`}
-              className="truncate text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              {quote.client.fullName}
-            </Link>
+            {quote.client ? (
+              <Link
+                href={`/admin/clients/${quote.client.id}`}
+                className="truncate text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                {quote.client.fullName}
+              </Link>
+            ) : (
+              /* Said out loud rather than left blank: this quote can be written
+                 and sent, and only acceptance will ask for a name. */
+              <span className="text-faint italic">Sin cliente</span>
+            )}
             {quote.validUntil ? (
               <span className="num text-faint">{`válido hasta ${quote.validUntil.split('-').reverse().join('/')}`}</span>
             ) : null}

@@ -20,6 +20,8 @@ const conceptName = `Gresite E2E ${runId}`
 const partidaName = `Partida E2E ${runId}`
 const quoteTitle = `Presupuesto E2E ${runId}`
 const freeLineName = `Desvío de riego ${runId}`
+const newClientName = `Cliente nuevo ${runId}`
+const looseQuoteTitle = `Sin cliente E2E ${runId}`
 
 let clientRowId: string
 
@@ -94,6 +96,7 @@ test.afterAll(async () => {
   await admin.from('quotes').delete().like('title', `%${runId}`)
   await admin.from('projects').delete().like('name', `%${runId}`)
   await admin.from('clients').delete().eq('id', clientRowId)
+  await admin.from('clients').delete().like('full_name', `%${runId}`)
   await admin.from('price_book_items').delete().like('name', `%${runId}`)
   await admin.from('price_book_groups').delete().like('name', `%${runId}`)
 })
@@ -259,12 +262,87 @@ test('builds a quote by ticking the catalogue, sends it, accepts it and reopens 
   await expect(group.getByRole('checkbox', { name: `Añadir ${conceptName}` })).toBeEnabled()
 })
 
+test('keeps what was typed when the form is refused, and creates the client from the dialog', async ({
+  page,
+}) => {
+  await loginAsStaff(page)
+  await page.goto('/admin/quotes')
+  await page.getByRole('button', { name: 'Nuevo presupuesto' }).click()
+
+  // A title of spaces passes the browser's own `required` and is refused by the
+  // schema, which is the path that used to hand back an empty dialog.
+  await page.getByLabel('Título *').fill('   ')
+  await page.getByLabel('Válido hasta').fill('2026-10-21')
+  await page.getByRole('button', { name: 'Crear y abrir' }).click()
+
+  await expect(page.getByText('El título es obligatorio.')).toBeVisible()
+  // The point of the whole change: the date is still there.
+  await expect(page.getByLabel('Válido hasta')).toHaveValue('2026-10-21')
+
+  // The client is optional, and the way to have one without leaving this dialog
+  // is to type the name and create it on top.
+  // By placeholder: the list screen behind the dialog has a "Cliente" filter of
+  // its own, and the picker's own hidden field carries the id.
+  await page.getByPlaceholder('Escribe un nombre').fill(newClientName)
+  await page.getByRole('button', { name: `Crear el cliente «${newClientName}»` }).click()
+
+  const clientDialog = page.getByRole('dialog').filter({ hasText: 'Nuevo cliente' })
+  await expect(clientDialog.getByLabel('Nombre *')).toHaveValue(newClientName)
+  await clientDialog.getByLabel('Correo *').fill(`nuevo-${runId}@example.test`)
+  await clientDialog.getByRole('button', { name: 'Crear cliente' }).click()
+
+  // The toast is deliberately NOT dismissed here. A Radix dialog is modal, so
+  // everything outside it -- the toast stack included -- is inert while it is
+  // open: the close button cannot be clicked until the dialog goes, and trying
+  // is how this test spent thirty seconds. It expires on its own.
+  //
+  // Back on the quote dialog, with the client it just created selected. Scoped
+  // to the dialog: the list screen behind it has a "Cliente" filter of its own.
+  await expect(page.getByPlaceholder('Escribe un nombre')).toHaveValue(newClientName)
+
+  await page.getByLabel('Título *').fill(`Presupuesto con cliente nuevo ${runId}`)
+  await page.getByRole('button', { name: 'Crear y abrir' }).click()
+
+  await expect(page).toHaveURL(/\/admin\/quotes\/[0-9a-f-]+/, { timeout: 15_000 })
+  await expect(page.locator('header')).toContainText(newClientName)
+})
+
+test('writes a quote with no client, and refuses to accept it until it has one', async ({ page }) => {
+  await loginAsStaff(page)
+  await page.goto('/admin/quotes')
+
+  await page.getByRole('button', { name: 'Nuevo presupuesto' }).click()
+  await page.getByLabel('Título *').fill(looseQuoteTitle)
+  await page.getByRole('button', { name: 'Crear y abrir' }).click()
+
+  await expect(page).toHaveURL(/\/admin\/quotes\/[0-9a-f-]+/, { timeout: 15_000 })
+  await expect(page.locator('header')).toContainText('Sin cliente')
+
+  // It can leave the office: a price given on the phone is a real quote.
+  await page.getByRole('button', { name: 'Marcar como enviado' }).click()
+  await dismissToast(page, 'enviado')
+
+  // Accepting is where it would become a project, and a project belongs to
+  // somebody: the database refuses it and the screen says what to do.
+  await page.getByRole('button', { name: 'Marcar como aceptado' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Marcar como aceptado' }).click()
+  await dismissToast(page, 'Asigna un cliente')
+
+  await expect(page.locator('header')).toContainText('Enviado')
+
+  await page.goto('/admin/quotes')
+  await expect(page.getByRole('row').filter({ hasText: looseQuoteTitle })).toContainText(
+    'Sin cliente',
+  )
+})
+
 test('lists the quote under its client and filters by status', async ({ page }) => {
   await loginAsStaff(page)
 
-  await page.goto('/admin/quotes')
-  await page.getByLabel('Buscar presupuestos').fill(clientName)
-  await expect(page).toHaveURL(/[?&]q=/)
+  // Straight to the filtered address rather than typing into the box: the
+  // search itself is a GET form whose behaviour the price-book spec already
+  // pins, and what this test is about is what the row says.
+  await page.goto(`/admin/quotes?q=${encodeURIComponent(clientName)}`)
 
   const row = page.getByRole('row').filter({ hasText: quoteTitle })
   await expect(row).toBeVisible({ timeout: 15_000 })

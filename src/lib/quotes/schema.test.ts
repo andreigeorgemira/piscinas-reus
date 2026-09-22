@@ -63,6 +63,18 @@ describe('the quote form', () => {
     })
   })
 
+  it('takes a quote with no client at all', () => {
+    // A price is quoted over the phone before anybody has taken a name down
+    // (0014_quote_without_client.sql). The empty select posts '', which has to
+    // become null rather than a validation error.
+    const parsed = quoteInputSchema.safeParse(
+      quoteInputFromForm(form({ client_id: '', title: 'Llamada de la mañana' })),
+    )
+
+    expect(parsed.success).toBe(true)
+    expect(parsed.success && parsed.data.clientId).toBeNull()
+  })
+
   it('refuses a client that is not a uuid', () => {
     const parsed = quoteInputSchema.safeParse(
       quoteInputFromForm(form({ ...validQuote, client_id: 'soler' })),

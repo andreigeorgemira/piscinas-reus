@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { firstIssue } from '@/lib/price-book/schema'
+import { fieldIssues, firstIssue } from '@/lib/price-book/schema'
 
-export { firstIssue }
+export { fieldIssues, firstIssue }
 
 /**
  * What the client form is allowed to write.

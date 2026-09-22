@@ -34,8 +34,8 @@ export type QuoteListRow = {
   reference: string
   title: string
   status: QuoteStatus
-  clientId: string
-  clientName: string
+  clientId: string | null
+  clientName: string | null
   createdAt: string
   sentAt: string | null
   validUntil: string | null
@@ -97,6 +97,10 @@ export type QuoteDetail = {
   sentAt: string | null
   respondedAt: string | null
   createdAt: string
+  /**
+   * Null until somebody puts a name on the quote: a price is often quoted
+   * before the client exists as a record (0014_quote_without_client.sql).
+   */
   client: {
     id: string
     fullName: string
@@ -105,7 +109,7 @@ export type QuoteDetail = {
     address: string | null
     city: string | null
     postalCode: string | null
-  }
+  } | null
   project: { id: string; reference: string } | null
   items: QuoteItem[]
   totals: QuoteTotals
@@ -215,7 +219,7 @@ type QuoteListRowResponse = {
   reference: string
   title: string
   status: QuoteStatus
-  client_id: string
+  client_id: string | null
   created_at: string
   sent_at: string | null
   valid_until: string | null
@@ -311,7 +315,7 @@ export async function listQuotes(
     title: row.title,
     status: row.status,
     clientId: row.client_id,
-    clientName: row.clients?.full_name ?? '',
+    clientName: row.clients?.full_name ?? null,
     createdAt: row.created_at,
     sentAt: row.sent_at,
     validUntil: row.valid_until,
@@ -426,15 +430,17 @@ export async function getQuote(
     sentAt: row.sent_at,
     respondedAt: row.responded_at,
     createdAt: row.created_at,
-    client: {
-      id: row.clients?.id ?? '',
-      fullName: row.clients?.full_name ?? '',
-      email: row.clients?.email ?? '',
-      phone: row.clients?.phone ?? null,
-      address: row.clients?.address ?? null,
-      city: row.clients?.city ?? null,
-      postalCode: row.clients?.postal_code ?? null,
-    },
+    client: row.clients
+      ? {
+          id: row.clients.id,
+          fullName: row.clients.full_name,
+          email: row.clients.email,
+          phone: row.clients.phone,
+          address: row.clients.address,
+          city: row.clients.city,
+          postalCode: row.clients.postal_code,
+        }
+      : null,
     project: row.projects ? { id: row.projects.id, reference: row.projects.reference } : null,
     items: row.quote_items.map(toItem),
     totals: totals.get(id) ?? ZERO_TOTALS,

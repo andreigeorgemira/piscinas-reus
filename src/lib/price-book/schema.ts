@@ -146,3 +146,21 @@ export function itemInputToRow(input: ItemInput) {
 export function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? 'Datos no válidos.'
 }
+
+/**
+ * Every validation message, keyed by the field it belongs to.
+ *
+ * The first message per field wins: a field that fails two rules has one box to
+ * say so in, and the first rule is the one the person reads first anyway.
+ * Issues with no path (a whole-object refinement) are left out -- `firstIssue`
+ * still carries those to the form's own error line.
+ */
+export function fieldIssues(error: z.ZodError): Record<string, string> {
+  const fields: Record<string, string> = {}
+  for (const issue of error.issues) {
+    const key = issue.path[0]
+    if (typeof key !== 'string' || key in fields) continue
+    fields[key] = issue.message
+  }
+  return fields
+}
