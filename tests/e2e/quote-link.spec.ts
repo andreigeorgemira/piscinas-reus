@@ -14,6 +14,8 @@ const toSendTitle = `Presupuesto por enviar ${runId}`
 
 const sentToken = `token-enviado-${runId}`
 const draftToken = `token-borrador-${runId}`
+const rejectToken = `token-rechazo-${runId}`
+const rejectTitle = `Presupuesto rechazado ${runId}`
 
 let clientId: string
 
@@ -121,6 +123,12 @@ test.beforeAll(async () => {
     status: 'draft',
   })
   await seedQuote({
+    title: rejectTitle,
+    reference: `Q-NO-${runId}`,
+    token: rejectToken,
+    status: 'sent',
+  })
+  await seedQuote({
     title: toSendTitle,
     reference: `Q-SEND-${runId}`,
     token: `token-por-enviar-${runId}`,
@@ -198,6 +206,28 @@ test('a client reads the quote, picks an extra and signs it', async ({ page }) =
   const row = page.getByRole('row').filter({ hasText: sentTitle })
   await expect(row).toContainText('Aceptado')
   await expect(row).toContainText(/P-\d{4}-\d{4}/)
+})
+
+test('a client says no, with a reason the office can read', async ({ page }) => {
+  await page.goto(`/q/${rejectToken}`)
+
+  await page.getByRole('button', { name: 'No me interesa' }).click()
+  await page.getByLabel('¿Nos cuentas por qué? (opcional)').fill('Nos hemos decidido por otra empresa.')
+  await page.getByRole('button', { name: 'Enviar respuesta' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Respuesta enviada' })).toBeVisible({
+    timeout: 15_000,
+  })
+  await expect(page.getByText('Nos hemos decidido por otra empresa.')).toBeVisible()
+  // Answered: there is nothing left to sign.
+  await expect(page.getByRole('button', { name: 'Acepto el presupuesto' })).toHaveCount(0)
+
+  // The office reads the reason on the quote itself, not only as a status.
+  await loginAsStaff(page)
+  await page.goto(`/admin/quotes?q=${encodeURIComponent(rejectTitle)}`)
+  await page.getByRole('link', { name: `Q-NO-${runId}` }).click()
+  await expect(page.getByText(/El cliente lo rechazó/)).toBeVisible()
+  await expect(page.getByText(/Nos hemos decidido por otra empresa/)).toBeVisible()
 })
 
 test('sending from the office marks the quote sent and opens its link', async ({ page }) => {

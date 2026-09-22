@@ -40,9 +40,28 @@ export default async function PublicQuotePage({ params }: PageProps<'/q/[token]'
 
   const open = quote.status === 'sent'
 
+  /*
+   * Past its validity, and still open.
+   *
+   * Nothing in the database stops a client signing a quote whose date has
+   * passed, and nothing should: prices from three months ago are a conversation,
+   * not an error, and the office would rather be rung than have the link die
+   * silently. So the page says it plainly and leaves the buttons alone.
+   */
+  const expired =
+    open &&
+    quote.validUntil !== null &&
+    quote.validUntil < new Date().toISOString().slice(0, 10)
+
   return (
     <main className="min-h-screen bg-canvas px-4 py-8 sm:py-12">
       <div className="mx-auto flex w-full max-w-[52rem] flex-col gap-5">
+        {expired ? (
+          <p className="rounded-xl border border-warn/40 bg-warn-soft px-5 py-3 text-xs text-warn">
+            {`La validez de este presupuesto venció el ${formatSpanishDate(quote.validUntil)}. Puedes firmarlo igualmente, pero escríbenos antes y lo revisamos: los precios pueden haber cambiado.`}
+          </p>
+        ) : null}
+
         <article className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
           <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-ink px-6 py-6 sm:px-8">
             <div>
