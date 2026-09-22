@@ -108,6 +108,20 @@ export function ActionBar({
    */
   useEffect(() => {
     if (!typed.current) return
+
+    /*
+     * Nothing to do when the URL already says what the box says.
+     *
+     * This effect re-runs on every searchParams change, so the navigation it
+     * performs re-arms its own timer and, 800 ms later, pushes the same
+     * address a second time. On its own that is only a wasted render -- but a
+     * row link clicked inside that window is overtaken by the second push and
+     * the browser lands back on the list, which is what
+     * tests/e2e/quotes.spec.ts saw when it clicked a client straight after
+     * searching for them.
+     */
+    if (term.trim() === (searchParams.get(searchName) ?? '')) return
+
     const timer = setTimeout(() => {
       const params = new URLSearchParams(searchParams.toString())
       if (term.trim()) params.set(searchName, term.trim())

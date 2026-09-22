@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { escapeFilterTerm } from '@/lib/supabase/filters'
 import type { UnitType } from './schema'
 
 /** The only Spanish string in this module: the label for items with no group. */
@@ -150,23 +151,6 @@ function toItem(row: ItemRow): PriceBookItem {
   }
 }
 
-/**
- * Wraps a search term for use inside a PostgREST `or` filter.
- *
- * That filter is a comma-separated string, so a search for "gresite, borada"
- * would otherwise be parsed as two conditions and the second one - `borada`,
- * with no column or operator - makes the whole request a 400. Parentheses
- * group conditions and would do the same. PostgREST's own answer is to
- * double-quote the value, which makes every reserved character literal; only
- * the backslash and the quote itself then need escaping.
- *
- * `*` is left alone deliberately: it is the ilike wildcard, and a staff
- * member typing `REV-*` meaning "everything in revestimiento" gets what they
- * asked for.
- */
-function quoteFilterValue(term: string): string {
-  return term.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-}
 
 /**
  * Reads one page of the price book as the grouped catalogue the admin screen
@@ -212,7 +196,7 @@ export async function listPriceBook(
     .eq('price_book_id', filter.priceBookId)
 
   if (search !== '') {
-    const term = quoteFilterValue(search)
+    const term = escapeFilterTerm(search)
     itemsQuery = itemsQuery.or(
       `code.ilike."*${term}*",name.ilike."*${term}*",description.ilike."*${term}*"`,
     )
@@ -394,4 +378,79 @@ export async function getPriceBook(
     groupCount: row.price_book_groups[0]?.count ?? 0,
     itemCount: row.price_book_items[0]?.count ?? 0,
   }
+}
+
+/** One group of a book with its active concepts, for the quote editor. */
+export type BookCatalogueGroup = {
+  id: string | null
+  name: string
+  position: number
+  concepts: PriceBookItem[]
+}
+
+/**
+ * A whole book, grouped, as the quote editor renders it.
+ *
+ * Retired concepts are left out: the editor must not offer a price the company
+ * has withdrawn. A line already written from one is untouched -- it holds its
+ * own copy of everything (0001_core_schema.sql) -- and the board keeps showing
+ * it, because a line that vanishes reads as deleted (src/lib/quotes/board.ts).
+ *
+ * Unpaged on purpose, unlike listPriceBook: this screen IS the catalogue, and a
+ * book split across pages cannot be ticked through. `capped` says when PostgREST's
+ * max_rows (1000, supabase/config.toml) cut the answer short, so the screen can
+ * say so instead of quietly offering less than the book holds.
+ */
+export async function getBookCatalogue(
+  supabase: SupabaseClient,
+  priceBookId: string,
+): Promise<{ groups: BookCatalogueGroup[]; conceptCount: number; capped: boolean }> {
+  const [groupsResult, itemsResult] = await Promise.all([
+    supabase
+      .from('price_book_groups')
+      .select('id, name, position')
+      .eq('price_book_id', priceBookId)
+      .order('position')
+      .order('name'),
+    supabase
+      .from('price_book_items')
+      .select('id, group_id, code, name, description, unit, unit_cost, unit_price, is_active', {
+        count: 'exact',
+      })
+      .eq('price_book_id', priceBookId)
+      .eq('is_active', true)
+      .order('code', { nullsFirst: false })
+      .order('name'),
+  ])
+
+  if (groupsResult.error) throw groupsResult.error
+  if (itemsResult.error) throw itemsResult.error
+
+  const groupRows = groupsResult.data as { id: string; name: string; position: number }[]
+  const groups = new Map<string, BookCatalogueGroup>(
+    groupRows.map((row) => [row.id, { id: row.id, name: row.name, position: row.position, concepts: [] }]),
+  )
+
+  const ungrouped: PriceBookItem[] = []
+  for (const row of itemsResult.data as ItemRow[]) {
+    const item = toItem(row)
+    if (item.groupId === null) {
+      ungrouped.push(item)
+      continue
+    }
+    // Dropped when its group is gone: the two queries run together, so a group
+    // deleted between them is absent here while its items can still name it.
+    groups.get(item.groupId)?.concepts.push(item)
+  }
+
+  const result = Array.from(groups.values())
+  if (ungrouped.length > 0) {
+    // Last, and named the same on screen and on the PDF (board.ts).
+    result.push({ id: null, name: UNGROUPED_NAME, position: Number.MAX_SAFE_INTEGER, concepts: ungrouped })
+  }
+
+  const shown = itemsResult.data.length
+  const total = itemsResult.count ?? shown
+
+  return { groups: result, conceptCount: total, capped: shown < total }
 }

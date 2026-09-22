@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  fieldIssues,
   firstIssue,
   groupInputFromForm,
   groupInputSchema,
@@ -363,5 +364,44 @@ describe('itemInputToRow', () => {
       unit_price: 15,
       is_active: true,
     })
+  })
+})
+
+describe('fieldIssues', () => {
+  it('keys the messages by the field they belong to', () => {
+    const parsed = itemInputSchema.safeParse({
+      groupId: '',
+      code: null,
+      name: '',
+      description: null,
+      unit: 'm2',
+      unitCost: 'no es un número',
+      unitPrice: '10,00',
+      isActive: true,
+    })
+
+    expect(parsed.success).toBe(false)
+    const fields = !parsed.success ? fieldIssues(parsed.error) : {}
+    expect(fields.name).toBe('El nombre es obligatorio.')
+    expect(fields.unitCost).toBe('El coste no es un número válido.')
+    expect(fields.unitPrice).toBeUndefined()
+  })
+
+  it('keeps the first message when a field fails twice', () => {
+    // One box, one message: the second rule has nowhere to be said, and the
+    // first is the one the person reads anyway.
+    const parsed = itemInputSchema.safeParse({
+      groupId: '',
+      code: null,
+      name: 'x'.repeat(300),
+      description: null,
+      unit: 'm2',
+      unitCost: '1,00',
+      unitPrice: '1,00',
+      isActive: true,
+    })
+
+    const fields = !parsed.success ? fieldIssues(parsed.error) : {}
+    expect(fields.name).toContain('200 caracteres')
   })
 })

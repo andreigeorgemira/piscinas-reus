@@ -208,6 +208,10 @@ test('drags a concept into another group and it stays there', async ({ page }) =
   // Named 'Grupo …' so the sweep in beforeAll clears them on the next run.
   const fromName = `Grupo Origen ${runId}`
   const toName = `Grupo Destino ${runId}`
+  // Positions 900 and 901 below have to stay ADJACENT in the rendered book: the
+  // drag presses a row in the first and drops it on the second's heading, so any
+  // other group landing between them puts a different handle under the pointer.
+  // tests/e2e/quotes.spec.ts keeps its own fixtures at 990 for that reason.
   const itemName = `Arrastrado ${runId}`
 
   const db = adminDb()
@@ -254,6 +258,21 @@ test('drags a concept into another group and it stays there', async ({ page }) =
   // Past the few pixels a press needs before it counts as a drag, then over
   // the other group in steps, the way a hand moves.
   await page.mouse.move(from.x + from.width / 2 + 8, from.y + from.height / 2 + 8, { steps: 4 })
+
+  /*
+   * The drag has to have STARTED before the pointer travels.
+   *
+   * dnd-kit only picks the row up once its activation distance is passed, and
+   * the press is what arms it; under load the nudge above can be delivered
+   * before React has the listeners on the handle, and then every move after it
+   * goes nowhere and the drop hint never appears. The root carries
+   * `data-dragging` while a row is held (see the rule in globals.css), so this
+   * waits for the app to say it is dragging instead of assuming it. Without it
+   * the test failed in the full suite and passed on its own -- the load was the
+   * difference.
+   */
+  await expect(page.locator('html[data-dragging]')).toHaveCount(1)
+
   await page.mouse.move(heading.x + 120, heading.y + heading.height / 2, { steps: 12 })
 
   // The card under the pointer names the destination before the drop.

@@ -29,8 +29,14 @@ const MAX_MONEY = 9_999_999.99
  * and leaves as a number. Rejecting rather than rounding a third decimal is
  * deliberate: silently rounding would charge a different amount than what
  * was typed with nothing on screen saying so (see decimal.ts).
+ *
+ * Exported because a quote line's cost and price are the same kind of number,
+ * typed on the same keyboard, and refused in the same words
+ * (src/lib/quotes/schema.ts). A second copy of this field would be a second
+ * set of messages to keep in step, and the first divergence would be a form
+ * that accepts three decimals on one screen and refuses them on the next.
  */
-function moneyField(label: string) {
+export function moneyField(label: string) {
   return z
     .string({ error: `El ${label} es obligatorio.` })
     .transform((raw, ctx) => {
@@ -139,4 +145,22 @@ export function itemInputToRow(input: ItemInput) {
 /** The first validation message, for surfacing a single error to the form. */
 export function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? 'Datos no válidos.'
+}
+
+/**
+ * Every validation message, keyed by the field it belongs to.
+ *
+ * The first message per field wins: a field that fails two rules has one box to
+ * say so in, and the first rule is the one the person reads first anyway.
+ * Issues with no path (a whole-object refinement) are left out -- `firstIssue`
+ * still carries those to the form's own error line.
+ */
+export function fieldIssues(error: z.ZodError): Record<string, string> {
+  const fields: Record<string, string> = {}
+  for (const issue of error.issues) {
+    const key = issue.path[0]
+    if (typeof key !== 'string' || key in fields) continue
+    fields[key] = issue.message
+  }
+  return fields
 }
