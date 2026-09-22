@@ -299,7 +299,10 @@ test('copies a quote from the list, lines included', async ({ page }) => {
   const reference = (await row.getByRole('link').first().textContent())!.trim()
   const lines = (await row.getByRole('cell').nth(3).textContent())!.trim()
 
-  await row.getByRole('button', { name: `Duplicar ${reference}` }).click()
+  // Duplicar lives in the row's own menu now, with the rest of what can be done
+  // to a quote without opening it.
+  await row.getByRole('button', { name: `Acciones de ${reference}` }).click()
+  await page.getByRole('button', { name: 'Duplicar' }).click()
   await dismissToast(page, 'Copiado en')
 
   // The copy is a draft of its own, named so the two are never confused, and it

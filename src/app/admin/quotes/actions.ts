@@ -6,6 +6,9 @@ import type { PostgrestError } from '@supabase/supabase-js'
 import type { ActionState } from '@/app/admin/action-state'
 import { readUuid } from '@/app/admin/form-values'
 import { requireAdmin } from '@/lib/auth/require-admin'
+import { buildQuoteEmail } from '@/lib/email/quote-email'
+import { sendEmail } from '@/lib/email/send'
+import { publicQuoteUrl } from '@/lib/quotes/public'
 import {
   fieldIssues,
   firstIssue,
@@ -201,6 +204,132 @@ export async function moveQuoteStatus(
   revalidatePath('/admin/quotes')
   revalidatePath(`/admin/quotes/${id}`)
   return { error: null }
+}
+
+/**
+ * What sending answers with.
+ *
+ * `skipped` is the honest case: no RESEND_API_KEY on this deployment, so the
+ * quote was marked as sent and the link is live, but nothing left the building.
+ * The screen says exactly that rather than claiming an email.
+ */
+export type SendQuoteState = ActionState & { skipped?: boolean }
+
+/**
+ * Sends the quote to its client and, with it, moves the quote to 'sent'.
+ *
+ * The move comes FIRST, and that order is the whole design. A draft has no
+ * public page -- quote_by_token refuses one (0015_public_quote_link.sql) -- so
+ * an email sent before the move would carry a link that 404s for as long as the
+ * two steps are apart. And the move cannot be undone afterwards to "clean up" a
+ * failed send: returning to draft rotates the token (0013), which would kill the
+ * link in the message that did go out.
+ *
+ * So: mark it sent, then send, and if the sending fails say so plainly -- the
+ * quote is sent, the link works, try the email again or paste the link into one
+ * of your own.
+ *
+ * This is also the answer to sending twice: re-sending an already sent quote
+ * changes no status and mints no new token, so both messages point at the same
+ * document.
+ */
+export async function sendQuoteToClient(
+  _previous: SendQuoteState,
+  formData: FormData,
+): Promise<SendQuoteState> {
+  const supabase = await requireAdmin()
+
+  const id = readUuid(formData, 'id')
+  if (id === null) {
+    return { error: INVALID_ID }
+  }
+
+  const { data, error: readError } = await supabase
+    .from('quotes')
+    .select(
+      'reference, title, status, valid_until, access_token, client_id, clients(full_name, email)',
+    )
+    .eq('id', id)
+    .maybeSingle()
+
+  if (readError) {
+    return { error: describeWriteError(readError, 'No se pudo leer el presupuesto.') }
+  }
+  if (!data) {
+    return { error: INVALID_ID }
+  }
+
+  const quote = data as unknown as {
+    reference: string
+    title: string
+    status: QuoteStatus
+    valid_until: string | null
+    access_token: string
+    client_id: string | null
+    clients: { full_name: string; email: string } | null
+  }
+
+  /*
+   * The total comes from its own read, not from an embedded select: quote_totals
+   * is a VIEW, and PostgREST can only embed what it can see a foreign key for
+   * (the same reason readTotals exists in src/lib/quotes/queries.ts). Asking for
+   * it as an embed answers PGRST200 and no total at all.
+   */
+  const { data: totals } = await supabase
+    .from('quote_totals')
+    .select('grand_total')
+    .eq('quote_id', id)
+    .maybeSingle()
+
+  if (!quote.clients?.email) {
+    return {
+      error:
+        'Asigna un cliente con correo antes de enviarlo. Puedes crearlo desde el propio presupuesto.',
+    }
+  }
+
+  if (quote.status === 'accepted' || quote.status === 'rejected') {
+    return { error: 'Este presupuesto ya tiene respuesta del cliente.' }
+  }
+
+  if (quote.status === 'draft') {
+    const { error } = await supabase.rpc('set_quote_status', {
+      p_quote_id: id,
+      p_status: 'sent',
+    })
+    if (error) {
+      return { error: describeWriteError(error, 'No se pudo marcar como enviado.') }
+    }
+  }
+
+  const rawMessage = formData.get('message')
+  const email = buildQuoteEmail({
+    reference: quote.reference,
+    title: quote.title,
+    clientName: quote.clients.full_name,
+    total: totals?.grand_total ?? 0,
+    validUntil: quote.valid_until,
+    url: publicQuoteUrl(quote.access_token),
+    message: typeof rawMessage === 'string' ? rawMessage.slice(0, 2000) : null,
+  })
+
+  const sent = await sendEmail({
+    to: quote.clients.email,
+    subject: email.subject,
+    html: email.html,
+    text: email.text,
+  })
+
+  revalidatePath('/admin/quotes')
+  revalidatePath(`/admin/quotes/${id}`)
+
+  if (!sent.ok) {
+    return {
+      error: `${sent.error} El presupuesto queda marcado como enviado y el enlace ya funciona: puedes copiarlo y mandarlo tú.`,
+    }
+  }
+
+  return { error: null, skipped: sent.skipped }
 }
 
 /** What duplicating a quote answers with: the copy's own reference, to name it. */
