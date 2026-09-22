@@ -36,10 +36,17 @@ export type QuoteListRow = {
   status: QuoteStatus
   clientId: string | null
   clientName: string | null
+  /** Where sending would send it. Null when the quote has no client yet. */
+  clientEmail: string | null
   createdAt: string
   sentAt: string | null
   validUntil: string | null
   projectReference: string | null
+  /**
+   * The credential in the public link. Admin-only data, on an admin-only screen:
+   * the row offers "copiar enlace" and the PDF without a second read.
+   */
+  accessToken: string
   /** How many lines the quote holds. A quote with none is a quote nobody wrote. */
   lineCount: number
   totals: QuoteTotals
@@ -98,6 +105,10 @@ export type QuoteDetail = {
   accessToken: string
   sentAt: string | null
   respondedAt: string | null
+  /** What the client left behind when they answered from the public link. */
+  signedName: string | null
+  signedAt: string | null
+  rejectionReason: string | null
   createdAt: string
   /**
    * Null until somebody puts a name on the quote: a price is often quoted
@@ -225,7 +236,8 @@ type QuoteListRowResponse = {
   created_at: string
   sent_at: string | null
   valid_until: string | null
-  clients: { full_name: string } | null
+  access_token: string
+  clients: { full_name: string; email: string } | null
   projects: { reference: string } | null
   /** An embedded aggregate, which PostgREST answers as a one-element array. */
   quote_items: { count: number }[]
@@ -254,7 +266,7 @@ export async function listQuotes(
   let query = supabase
     .from('quotes')
     .select(
-      'id, reference, title, status, client_id, created_at, sent_at, valid_until, clients(full_name), projects(reference), quote_items(count)',
+      'id, reference, title, status, client_id, created_at, sent_at, valid_until, access_token, clients(full_name, email), projects(reference), quote_items(count)',
       { count: 'exact' },
     )
 
@@ -320,10 +332,12 @@ export async function listQuotes(
     status: row.status,
     clientId: row.client_id,
     clientName: row.clients?.full_name ?? null,
+    clientEmail: row.clients?.email ?? null,
     createdAt: row.created_at,
     sentAt: row.sent_at,
     validUntil: row.valid_until,
     projectReference: row.projects?.reference ?? null,
+    accessToken: row.access_token,
     lineCount: row.quote_items[0]?.count ?? 0,
     totals: totals.get(row.id) ?? ZERO_TOTALS,
   }))
@@ -373,6 +387,9 @@ type QuoteDetailResponse = {
   access_token: string
   sent_at: string | null
   responded_at: string | null
+  signed_name: string | null
+  signed_at: string | null
+  rejection_reason: string | null
   created_at: string
   clients: {
     id: string
@@ -404,7 +421,7 @@ export async function getQuote(
       .from('quotes')
       .select(
         `id, reference, title, status, start_date_planned, valid_until, client_notes, internal_notes,
-         access_token, sent_at, responded_at, created_at,
+         access_token, sent_at, responded_at, signed_name, signed_at, rejection_reason, created_at,
          clients(id, full_name, email, phone, address, city, postal_code),
          projects(id, reference),
          quote_items(${ITEM_SELECT})`,
@@ -434,6 +451,9 @@ export async function getQuote(
     accessToken: row.access_token,
     sentAt: row.sent_at,
     respondedAt: row.responded_at,
+    signedName: row.signed_name,
+    signedAt: row.signed_at,
+    rejectionReason: row.rejection_reason,
     createdAt: row.created_at,
     client: row.clients
       ? {

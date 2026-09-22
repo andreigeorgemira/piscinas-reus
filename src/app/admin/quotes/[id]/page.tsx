@@ -7,11 +7,12 @@ import { requireAdmin } from '@/lib/auth/require-admin'
 import { listClientOptions } from '@/lib/clients/queries'
 import { getBookCatalogue, listPriceBooks } from '@/lib/price-book/queries'
 import { buildBoard } from '@/lib/quotes/board'
+import { publicQuoteUrl } from '@/lib/quotes/public'
 import { getQuote } from '@/lib/quotes/queries'
 import { isEditable } from '@/lib/quotes/status'
 import { BookSelect } from '@/app/admin/quotes/book-select'
+import { QuoteMenu, SendQuoteButton } from '@/app/admin/quotes/quote-menu'
 import { GroupCard } from './group-card'
-import { DeleteQuoteButton } from './quote-actions'
 import { QuoteDetailsButton } from './quote-details'
 import { QuoteTotalsBar } from './quote-totals'
 import { SaveNowButton } from './save-now'
@@ -95,6 +96,16 @@ export default async function QuoteEditorPage({
   const catalogue = book
     ? await getBookCatalogue(supabase, book.id)
     : { groups: [], conceptCount: 0, capped: false }
+
+  const sendable = {
+    id: quote.id,
+    reference: quote.reference,
+    title: quote.title,
+    status: quote.status,
+    clientName: quote.client?.fullName ?? null,
+    clientEmail: quote.client?.email ?? null,
+    publicUrl: publicQuoteUrl(quote.accessToken),
+  }
 
   const board = buildBoard({ groups: catalogue.groups }, quote.items, {
     search: query.q,
@@ -232,7 +243,14 @@ export default async function QuoteEditorPage({
 
         <SaveNowButton />
 
-        <DeleteQuoteButton quote={quote} />
+        <SendQuoteButton
+          quote={sendable}
+          className="flex h-9 items-center gap-1.5 rounded-lg border border-ink bg-ink px-3 text-xs font-medium text-canvas transition-colors hover:bg-ink-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        />
+
+        <QuoteMenu
+          quote={{ ...sendable, lineCount: quote.items.length, projectReference: quote.project?.reference ?? null }}
+        />
       </div>
 
       {/*
@@ -244,6 +262,50 @@ export default async function QuoteEditorPage({
         scrollbar next to a screen that fits. Giving the scrolling box a
         containing block keeps them inside it.
       */}
+      {/*
+        What the client did with it, where the office will look for it: on the
+        quote itself, not only as a status in a list. A signature is the end of
+        this document's life and deserves more than a badge.
+      */}
+      {quote.status === 'accepted' ? (
+        <p className="flex flex-wrap items-center gap-2 border-b border-success/30 bg-success-soft px-6 py-2 text-xs text-success">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m3.2 8.4 3.2 3.2 6.4-6.8" />
+          </svg>
+          {quote.signedName
+            ? `Firmado por ${quote.signedName}${
+                quote.signedAt ? ` el ${quote.signedAt.slice(0, 10).split('-').reverse().join('/')}` : ''
+              } desde el enlace.`
+            : 'Aceptado.'}
+          {quote.project ? (
+            <span className="num text-success/80">{`Proyecto ${quote.project.reference}`}</span>
+          ) : null}
+        </p>
+      ) : null}
+
+      {quote.status === 'rejected' ? (
+        <p className="flex flex-wrap items-center gap-2 border-b border-line bg-surface-sunk px-6 py-2 text-xs text-muted">
+          El cliente lo rechazó
+          {quote.respondedAt
+            ? ` el ${quote.respondedAt.slice(0, 10).split('-').reverse().join('/')}`
+            : ''}
+          .
+          {quote.rejectionReason ? (
+            <span className="text-ink-soft italic">«{quote.rejectionReason}»</span>
+          ) : null}
+        </p>
+      ) : null}
+
       <div className="relative min-h-0 flex-1 overflow-y-auto px-6 py-4">
         {catalogue.capped ? (
           <p className="mb-3 rounded-lg border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn">

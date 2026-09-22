@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { formatEuros } from '@/lib/price-book/decimal'
 import type { QuoteListRow } from '@/lib/quotes/queries'
-import { QuoteRowActions, QuoteStatusControl, type QuoteRowSummary } from './row-actions'
+import { publicQuoteUrl } from '@/lib/quotes/public'
+import { QuoteMenu } from './quote-menu'
+import { QuoteStatusControl, type QuoteRowSummary } from './row-actions'
 
 const CELL_CLASS = 'border-b border-line-soft px-3 py-2.5 align-middle'
 
@@ -77,7 +79,23 @@ export function QuoteRow({ quote }: { quote: QuoteListRow }) {
         {formatEuros(quote.totals.margin)}
       </td>
       <td className={CELL_CLASS}>
-        <QuoteRowActions quote={summary} />
+        {/* relative z-10: the row is one stretched link, and the menu has to
+            keep its own clicks. */}
+        <div className="relative z-10 flex justify-end opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
+          <QuoteMenu
+            quote={{
+              id: quote.id,
+              reference: quote.reference,
+              title: quote.title,
+              status: quote.status,
+              clientName: quote.clientName,
+              clientEmail: quote.clientEmail,
+              publicUrl: publicQuoteUrl(quote.accessToken),
+              lineCount: quote.lineCount,
+              projectReference: quote.projectReference,
+            }}
+          />
+        </div>
       </td>
     </tr>
   )

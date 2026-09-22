@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import { idleState } from '@/app/admin/action-state'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Tooltip } from '@/components/ui/tooltip'
 import { formatEuros } from '@/lib/price-book/decimal'
 import {
   movesFrom,
@@ -13,7 +12,7 @@ import {
   QUOTE_STATUS_LABELS,
   type QuoteStatus,
 } from '@/lib/quotes/status'
-import { deleteQuote, duplicateQuote, moveQuoteStatus } from './actions'
+import { moveQuoteStatus } from './actions'
 import { StatusBadge } from './status-badge'
 
 /** What a list row needs to hand to its own controls. */
@@ -39,9 +38,6 @@ const ICON_PROPS = {
   strokeLinejoin: 'round',
   'aria-hidden': true,
 } as const
-
-const ROW_BUTTON_CLASS =
-  'flex size-7 items-center justify-center rounded-md border border-line bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:opacity-60'
 
 /**
  * The status, changed where it is read.
@@ -158,94 +154,6 @@ export function QuoteStatusControl({ quote }: { quote: QuoteRowSummary }) {
         ]}
         confirmLabel="Volver a borrador"
         onConfirm={() => move('draft')}
-      />
-    </>
-  )
-}
-
-/**
- * What can be done to a quote without opening it: copy it, or get rid of it.
- *
- * Duplicating is the one that earns its place. The next quote is usually the last
- * one with two numbers changed, and doing that by hand meant ticking forty
- * concepts again.
- */
-export function QuoteRowActions({ quote }: { quote: QuoteRowSummary }) {
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const [pending, startAction] = useTransition()
-
-  function runDuplicate() {
-    startAction(async () => {
-      const data = new FormData()
-      data.set('id', quote.id)
-      const result = await duplicateQuote(idleState, data)
-      if (result.error) toast.error(result.error)
-      else toast.success(`Copiado en ${result.reference}`)
-    })
-  }
-
-  function runDelete() {
-    return new Promise<void>((resolve) => {
-      startAction(async () => {
-        const data = new FormData()
-        data.set('id', quote.id)
-        const result = await deleteQuote(idleState, data)
-        if (result.error) toast.error(result.error)
-        else toast.error(`${quote.reference} borrado`)
-        resolve()
-      })
-    })
-  }
-
-  return (
-    <>
-      <div className="relative z-10 flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
-        <Tooltip label="Duplicar">
-          <button
-            type="button"
-            disabled={pending}
-            onClick={runDuplicate}
-            aria-label={`Duplicar ${quote.reference}`}
-            className={ROW_BUTTON_CLASS}
-          >
-            <svg {...ICON_PROPS}>
-              <path d="M5.6 5.6V3.4h7.2v7.2h-2.2" />
-              <path d="M3.2 5.6h7.2v7.2H3.2z" />
-            </svg>
-          </button>
-        </Tooltip>
-
-        <Tooltip label="Borrar presupuesto">
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => setConfirmingDelete(true)}
-            aria-label={`Borrar ${quote.reference}`}
-            className={`${ROW_BUTTON_CLASS} hover:border-danger hover:bg-danger-soft hover:text-danger`}
-          >
-            <svg {...ICON_PROPS}>
-              <path d="M2.8 4.2h10.4" />
-              <path d="M6.2 4.2V2.8h3.6v1.4" />
-              <path d="M4.2 4.2h7.6l-.6 8.2a.8.8 0 0 1-.8.8H5.6a.8.8 0 0 1-.8-.8Z" />
-            </svg>
-          </button>
-        </Tooltip>
-      </div>
-
-      <ConfirmDialog
-        open={confirmingDelete}
-        onOpenChange={setConfirmingDelete}
-        title={`Borrar ${quote.reference}`}
-        description={`«${quote.title}»${quote.clientName ? `, de ${quote.clientName}` : ''}.`}
-        risks={[
-          `Se borran sus ${quote.lineCount} ${quote.lineCount === 1 ? 'línea' : 'líneas'}. No se puede deshacer.`,
-          'El enlace público deja de funcionar.',
-          quote.projectReference
-            ? `El proyecto ${quote.projectReference} NO se borra: queda sin presupuesto asociado.`
-            : 'El cliente y el tarifario no se tocan.',
-        ]}
-        confirmLabel="Borrar presupuesto"
-        onConfirm={runDelete}
       />
     </>
   )
