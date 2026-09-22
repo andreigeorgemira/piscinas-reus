@@ -3,42 +3,23 @@
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { idleState } from '@/app/admin/action-state'
-import { HEADER_BUTTON_CLASS, HEADER_PRIMARY_BUTTON_CLASS } from '@/app/admin/price-book/ui'
-import { deleteQuote, moveQuoteStatus } from '@/app/admin/quotes/actions'
+import { deleteQuote } from '@/app/admin/quotes/actions'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { formatEuros } from '@/lib/price-book/decimal'
 import type { QuoteDetail } from '@/lib/quotes/queries'
-import { movesFrom, QUOTE_MOVE_LABELS, type QuoteStatus } from '@/lib/quotes/status'
 
 /**
- * The buttons that move a quote through its life, and the one that ends it.
+ * Deleting the quote you are looking at.
  *
- * Which buttons exist comes from movesFrom() (src/lib/quotes/status.ts), which
- * mirrors set_quote_status in the database. Two of the moves ask first, and for
- * opposite reasons: accepting creates a project, and returning to draft kills
- * the link a client may be looking at. Sending and rejecting are a keystroke,
- * because both are reversible from this same strip.
+ * The only thing left of what used to be a strip of status buttons in the
+ * header. Sending, accepting, rejecting and reopening moved to the quote list,
+ * where they are done one row at a time without opening anything: those are
+ * decisions about a document somebody already read, and the editor is where the
+ * document is written. It also leaves room for what those moves will really be
+ * later -- send an email, produce a PDF, hand the client a link to sign.
  */
-export function QuoteActions({ quote }: { quote: QuoteDetail }) {
-  const [confirming, setConfirming] = useState<QuoteStatus | null>(null)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
+export function DeleteQuoteButton({ quote }: { quote: QuoteDetail }) {
+  const [confirming, setConfirming] = useState(false)
   const [pending, startAction] = useTransition()
-
-  function move(status: QuoteStatus) {
-    return new Promise<void>((resolve) => {
-      startAction(async () => {
-        const data = new FormData()
-        data.set('id', quote.id)
-        data.set('status', status)
-        const result = await moveQuoteStatus(idleState, data)
-        if (result.error) toast.error(result.error)
-        else if (status === 'accepted') toast.success('Presupuesto aceptado. Proyecto creado.')
-        else if (status === 'draft') toast.success('Presupuesto reabierto. El enlace anterior ya no vale.')
-        else toast.success(`Presupuesto marcado como ${QUOTE_MOVE_LABELS[status].toLowerCase().replace('marcar como ', '')}`)
-        resolve()
-      })
-    })
-  }
 
   function runDelete() {
     return new Promise<void>((resolve) => {
@@ -55,64 +36,33 @@ export function QuoteActions({ quote }: { quote: QuoteDetail }) {
 
   return (
     <>
-      {movesFrom(quote.status).map((status) => {
-        const asks = status === 'accepted' || status === 'draft'
-        const primary = status === 'sent' || status === 'accepted'
-        return (
-          <button
-            key={status}
-            type="button"
-            disabled={pending}
-            onClick={() => (asks ? setConfirming(status) : void move(status))}
-            className={primary ? HEADER_PRIMARY_BUTTON_CLASS : HEADER_BUTTON_CLASS}
-          >
-            {QUOTE_MOVE_LABELS[status]}
-          </button>
-        )
-      })}
-
       <button
         type="button"
         disabled={pending}
-        onClick={() => setConfirmingDelete(true)}
-        className={HEADER_BUTTON_CLASS}
+        onClick={() => setConfirming(true)}
+        className="flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs text-muted transition-colors hover:border-danger hover:bg-danger-soft hover:text-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:opacity-60"
       >
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M2.8 4.2h10.4" />
+          <path d="M6.2 4.2V2.8h3.6v1.4" />
+          <path d="M4.2 4.2h7.6l-.6 8.2a.8.8 0 0 1-.8.8H5.6a.8.8 0 0 1-.8-.8Z" />
+        </svg>
         Borrar
       </button>
 
       <ConfirmDialog
-        open={confirming === 'accepted'}
-        onOpenChange={(open) => setConfirming(open ? 'accepted' : null)}
-        tone="normal"
-        title={`Marcar ${quote.reference} como aceptado`}
-        description={`El cliente acepta ${formatEuros(quote.totals.grandTotal)}.`}
-        risks={[
-          'Se crea el proyecto con su propia referencia (P-año-nnnn), a nombre de este cliente.',
-          'Las líneas siguen congeladas: para cambiarlas hay que volver a borrador.',
-        ]}
-        confirmLabel="Marcar como aceptado"
-        onConfirm={() => move('accepted')}
-      />
-
-      <ConfirmDialog
-        open={confirming === 'draft'}
-        onOpenChange={(open) => setConfirming(open ? 'draft' : null)}
-        title={`Volver ${quote.reference} a borrador`}
-        description="Se vuelve a poder editar, y a cambio el enlace que tenga el cliente deja de funcionar."
-        risks={[
-          'El enlace público cambia: el que ya esté enviado no abrirá nada.',
-          'Se borran las marcas de enviado y de respuesta.',
-          quote.project
-            ? `El proyecto ${quote.project.reference} sigue existiendo: reabrir el papeleo no deshace la obra.`
-            : 'Habrá que volver a enviarlo cuando esté listo.',
-        ]}
-        confirmLabel="Volver a borrador"
-        onConfirm={() => move('draft')}
-      />
-
-      <ConfirmDialog
-        open={confirmingDelete}
-        onOpenChange={setConfirmingDelete}
+        open={confirming}
+        onOpenChange={setConfirming}
         title={`Borrar ${quote.reference}`}
         description={
           quote.client ? `«${quote.title}», de ${quote.client.fullName}.` : `«${quote.title}».`

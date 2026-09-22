@@ -15,12 +15,14 @@ export const metadata: Metadata = { title: 'Presupuestos' }
 
 const COLUMNS: TableColumn[] = [
   { key: 'reference', label: 'Referencia' },
-  { key: 'client', label: 'Cliente', width: 'w-56' },
-  { key: 'status', label: 'Estado', width: 'w-32' },
+  { key: 'client', label: 'Cliente', width: 'w-52' },
+  { key: 'status', label: 'Estado', width: 'w-36' },
+  { key: 'lines', label: 'Líneas', width: 'w-20', align: 'right' },
   { key: 'created', label: 'Creado', width: 'w-28' },
   { key: 'valid', label: 'Válido hasta', width: 'w-32' },
   { key: 'total', label: 'Total', width: 'w-32', align: 'right' },
   { key: 'margin', label: 'Margen', width: 'w-28', align: 'right' },
+  { key: 'actions', label: 'Acciones', width: 'w-24', srOnly: true },
 ]
 
 const FILTER_FIELD_CLASS =

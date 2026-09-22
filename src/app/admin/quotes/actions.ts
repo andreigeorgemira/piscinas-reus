@@ -203,6 +203,101 @@ export async function moveQuoteStatus(
   return { error: null }
 }
 
+/** What duplicating a quote answers with: the copy's own reference, to name it. */
+export type DuplicateQuoteState = ActionState & { reference?: string }
+
+/**
+ * Copies a quote and every line on it.
+ *
+ * The most common thing a pool builder quotes is the quote they wrote last week
+ * with two numbers changed, and until now that meant ticking forty concepts
+ * again. The copy is a draft whatever the original was, with its own reference
+ * and its own access token (both allocated by the database), so nothing about
+ * the original moves and no link is shared between them.
+ *
+ * Lines are copied field by field rather than with `select *`: the copy must not
+ * inherit `client_selected` (the client's answer about THIS document) and must
+ * not carry the original's id. Everything else is the snapshot the line already
+ * was.
+ */
+export async function duplicateQuote(
+  _previous: DuplicateQuoteState,
+  formData: FormData,
+): Promise<DuplicateQuoteState> {
+  const supabase = await requireAdmin()
+
+  const id = readUuid(formData, 'id')
+  if (id === null) {
+    return { error: INVALID_ID }
+  }
+
+  const { data: original, error: readError } = await supabase
+    .from('quotes')
+    .select(
+      'client_id, title, start_date_planned, valid_until, client_notes, internal_notes, quote_items(price_book_item_id, group_name, name, description, unit, quantity, unit_cost, unit_price, discount_pct, is_recommended, position)',
+    )
+    .eq('id', id)
+    .maybeSingle()
+
+  if (readError) {
+    return { error: describeWriteError(readError, 'No se pudo leer el presupuesto.') }
+  }
+  if (!original) {
+    return { error: INVALID_ID }
+  }
+
+  const source = original as unknown as {
+    client_id: string | null
+    title: string
+    start_date_planned: string | null
+    valid_until: string | null
+    client_notes: string | null
+    internal_notes: string | null
+    quote_items: Record<string, unknown>[]
+  }
+
+  const { data: copy, error } = await supabase
+    .from('quotes')
+    .insert({
+      client_id: source.client_id,
+      // Named so the two are never confused in a list sorted by date. 200 is the
+      // column's limit, so a long title loses its tail rather than the suffix.
+      title: `${source.title} (copia)`.slice(0, 200),
+      start_date_planned: source.start_date_planned,
+      valid_until: source.valid_until,
+      client_notes: source.client_notes,
+      internal_notes: source.internal_notes,
+    })
+    .select('id, reference')
+    .single()
+
+  if (error) {
+    return { error: describeWriteError(error, 'No se pudo duplicar el presupuesto.') }
+  }
+
+  if (source.quote_items.length > 0) {
+    const { error: linesError } = await supabase
+      .from('quote_items')
+      .insert(source.quote_items.map((line) => ({ ...line, quote_id: copy!.id })))
+
+    if (linesError) {
+      // The copy exists but is empty, and saying so is better than a silent
+      // half-copy: the quote is there to open, delete or fill by hand.
+      console.error('could not copy the quote lines', linesError)
+      revalidatePath('/admin/quotes')
+      return {
+        error: `Se creó ${copy!.reference} pero sus líneas no se copiaron. Ábrelo y revísalo.`,
+      }
+    }
+  }
+
+  revalidatePath('/admin/quotes')
+  if (source.client_id) {
+    revalidatePath(`/admin/clients/${source.client_id}`)
+  }
+  return { error: null, reference: copy!.reference }
+}
+
 /**
  * Deletes a quote and every line on it: `quote_items.quote_id` cascades
  * (0001_core_schema.sql).

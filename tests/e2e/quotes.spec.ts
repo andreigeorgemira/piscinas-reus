@@ -102,6 +102,7 @@ test.afterAll(async () => {
   // restrict). Deleting a quote cascades to its lines, which the freeze
   // trigger allows on purpose (0009_quote_immutability.sql).
   await admin.from('quotes').delete().like('title', `%${runId}`)
+  await admin.from('quotes').delete().like('title', `%${runId} (copia)`)
   await admin.from('projects').delete().like('name', `%${runId}`)
   await admin.from('clients').delete().eq('id', clientRowId)
   await admin.from('clients').delete().like('full_name', `%${runId}`)
@@ -176,7 +177,9 @@ test('builds a quote by ticking the catalogue, sends it, accepts it and reopens 
 
   await expect(page).toHaveURL(/\/admin\/quotes\/[0-9a-f-]+/, { timeout: 15_000 })
   // The reference is allocated by the database, not by the form.
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Q-\d{4}-\d{4}$/)
+  const heading = page.getByRole('heading', { level: 1 })
+  await expect(heading).toHaveText(/^Q-\d{4}-\d{4}$/)
+  const reference = (await heading.textContent())!.trim()
 
   // The catalogue IS the editor: the concept is on screen from the start, in its
   // group, and ticking it writes the line.
@@ -199,11 +202,18 @@ test('builds a quote by ticking the catalogue, sends it, accepts it and reopens 
   // Cost came from the catalogue too (10 €), so the margin is the other half.
   await expect(totals).toContainText('125,00')
 
-  // Marking it optional takes it out of the price without deleting anything.
-  await line.getByRole('button', { name: 'Opcional' }).click()
+  // Marking it optional takes it out of the price without deleting anything. One
+  // checkbox at the end of the row, no Base/Opcional switch in the middle of it.
+  const optional = line.getByRole('checkbox', { name: `Marcar ${conceptName} como extra opcional` })
+  await optional.check()
   await expect(totals).toContainText('Extras opcionales')
-  await line.getByRole('button', { name: 'Base' }).click()
+  await optional.uncheck()
   await expect(totals).toContainText('250,00')
+
+  // The unit belongs to this quote, not to the tariff: hours here leave the
+  // catalogue's m² alone.
+  await line.getByLabel(`Unidad de ${conceptName}`).selectOption('hour')
+  await expect(line.getByLabel(`Unidad de ${conceptName}`)).toHaveValue('hour')
 
   // The same concept twice: the case a checkbox alone cannot express. The copy
   // owns its name, because "Gresite" twice on a PDF tells the client nothing.
@@ -242,32 +252,63 @@ test('builds a quote by ticking the catalogue, sends it, accepts it and reopens 
   // The free line is untouched: it belongs to the quote, not to the concept.
   await expect(freeRow).toBeVisible()
 
-  // Sending freezes the lines. The refusal is a trigger; what is asserted here
-  // is that the screen stops offering the controls whose save it would refuse.
+  // Every status move happens from the list now: the badge is the control, and
+  // the editor is left for writing the quote.
+  await page.goto('/admin/quotes')
+  const row = page.getByRole('row').filter({ hasText: reference })
+  await row.getByRole('button', { name: `Cambiar el estado de ${reference}` }).click()
   await page.getByRole('button', { name: 'Marcar como enviado' }).click()
-  await dismissToast(page, 'enviado')
+  await dismissToast(page, reference)
+  await expect(row).toContainText('Enviado')
 
-  await expect(page.locator('header')).toContainText('Enviado')
-  await expect(group.getByRole('checkbox', { name: `Añadir ${conceptName}` })).toBeDisabled()
-  await expect(group.getByRole('button', { name: `Línea libre en ${partidaName}` })).toBeHidden()
+  // Sending freezes the lines. The refusal is a trigger; what is asserted here is
+  // that the screen stops offering the controls whose save it would refuse.
+  await row.getByRole('link', { name: reference }).click()
+  await expect(page).toHaveURL(/\/admin\/quotes\/[0-9a-f-]+/)
+  await expect(
+    page.getByRole('checkbox', { name: `Añadir ${conceptName}` }),
+  ).toBeDisabled()
+  await expect(page.getByRole('button', { name: `Línea libre en ${partidaName}` })).toBeHidden()
 
   // Accepting creates the project, which is what makes a quote work rather than
   // paperwork. The dialog says so before it happens.
+  await page.goto('/admin/quotes')
+  await row.getByRole('button', { name: `Cambiar el estado de ${reference}` }).click()
   await page.getByRole('button', { name: 'Marcar como aceptado' }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: 'Marcar como aceptado' }).click()
   await dismissToast(page, 'Proyecto creado')
 
-  await expect(page.locator('header')).toContainText(/Proyecto P-\d{4}-\d{4}/)
-  await expect(page.locator('header')).toContainText('Aceptado')
+  await expect(row).toContainText('Aceptado')
+  await expect(row).toContainText(/P-\d{4}-\d{4}/)
 
   // Reopening gives the lines back and kills the link. The project stays.
+  await row.getByRole('button', { name: `Cambiar el estado de ${reference}` }).click()
   await page.getByRole('button', { name: 'Volver a borrador' }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: 'Volver a borrador' }).click()
-  await dismissToast(page, 'reabierto')
+  await dismissToast(page, 'borrador')
 
-  await expect(page.locator('header')).toContainText('Borrador')
-  await expect(page.locator('header')).toContainText(/Proyecto P-\d{4}-\d{4}/)
-  await expect(group.getByRole('checkbox', { name: `Añadir ${conceptName}` })).toBeEnabled()
+  await expect(row).toContainText('Borrador')
+  await expect(row).toContainText(/P-\d{4}-\d{4}/)
+})
+
+test('copies a quote from the list, lines included', async ({ page }) => {
+  await loginAsStaff(page)
+  await page.goto(`/admin/quotes?q=${encodeURIComponent(quoteTitle)}`)
+
+  const row = page.getByRole('row').filter({ hasText: quoteTitle })
+  const reference = (await row.getByRole('link').first().textContent())!.trim()
+  const lines = (await row.getByRole('cell').nth(3).textContent())!.trim()
+
+  await row.getByRole('button', { name: `Duplicar ${reference}` }).click()
+  await dismissToast(page, 'Copiado en')
+
+  // The copy is a draft of its own, named so the two are never confused, and it
+  // carries the same lines: the next quote is usually the last one with two
+  // numbers changed.
+  const copy = page.getByRole('row').filter({ hasText: `${quoteTitle} (copia)` })
+  await expect(copy).toBeVisible()
+  await expect(copy).toContainText('Borrador')
+  await expect(copy.getByRole('cell').nth(3)).toHaveText(lines)
 })
 
 test('keeps what was typed when the form is refused, and creates the client from the dialog', async ({
@@ -326,22 +367,26 @@ test('writes a quote with no client, and refuses to accept it until it has one',
   await expect(page).toHaveURL(/\/admin\/quotes\/[0-9a-f-]+/, { timeout: 15_000 })
   await expect(page.locator('header')).toContainText('Sin cliente')
 
+  const reference = (await page.getByRole('heading', { level: 1 }).textContent())!.trim()
+
+  await page.goto('/admin/quotes')
+  const row = page.getByRole('row').filter({ hasText: looseQuoteTitle })
+  await expect(row).toContainText('Sin cliente')
+
   // It can leave the office: a price given on the phone is a real quote.
+  await row.getByRole('button', { name: `Cambiar el estado de ${reference}` }).click()
   await page.getByRole('button', { name: 'Marcar como enviado' }).click()
-  await dismissToast(page, 'enviado')
+  await dismissToast(page, reference)
+  await expect(row).toContainText('Enviado')
 
   // Accepting is where it would become a project, and a project belongs to
   // somebody: the database refuses it and the screen says what to do.
+  await row.getByRole('button', { name: `Cambiar el estado de ${reference}` }).click()
   await page.getByRole('button', { name: 'Marcar como aceptado' }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: 'Marcar como aceptado' }).click()
   await dismissToast(page, 'Asigna un cliente')
 
-  await expect(page.locator('header')).toContainText('Enviado')
-
-  await page.goto('/admin/quotes')
-  await expect(page.getByRole('row').filter({ hasText: looseQuoteTitle })).toContainText(
-    'Sin cliente',
-  )
+  await expect(row).toContainText('Enviado')
 })
 
 test('lists the quote under its client and filters by status', async ({ page }) => {
@@ -352,7 +397,12 @@ test('lists the quote under its client and filters by status', async ({ page }) 
   // pins, and what this test is about is what the row says.
   await page.goto(`/admin/quotes?q=${encodeURIComponent(clientName)}`)
 
-  const row = page.getByRole('row').filter({ hasText: quoteTitle })
+  // Not the copy the duplicate test leaves behind, whose title contains this
+  // one's.
+  const row = page
+    .getByRole('row')
+    .filter({ hasText: quoteTitle })
+    .filter({ hasNotText: '(copia)' })
   await expect(row).toBeVisible({ timeout: 15_000 })
   await expect(row).toContainText(clientName)
   await expect(row).toContainText('Borrador')
@@ -360,6 +410,8 @@ test('lists the quote under its client and filters by status', async ({ page }) 
 
   // The status filter, which is how staff find what is out of the office.
   await page.goto('/admin/quotes?status=sent')
-  await expect(page.getByRole('row').filter({ hasText: quoteTitle })).toBeHidden()
+  await expect(
+    page.getByRole('row').filter({ hasText: quoteTitle }).filter({ hasNotText: '(copia)' }),
+  ).toBeHidden()
   await expect(page.getByText('Estado:')).toBeVisible()
 })

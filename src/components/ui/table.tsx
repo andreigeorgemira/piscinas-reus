@@ -50,7 +50,14 @@ export function DataTable({
      */
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-card">
       {toolbar}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      {/*
+        `relative` for the same reason the quote editor's scroll area carries it:
+        the hidden labels this table renders (`srOnly` headers, and the ones the
+        rows put on their fields) are `position: absolute`, so without a
+        containing block here they are laid out against the document and make the
+        page scroll as tall as the table.
+      */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
         <table className="w-full table-fixed border-collapse text-sm">
           <colgroup>
             {columns.map((column) => (

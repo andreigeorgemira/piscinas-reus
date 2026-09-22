@@ -40,6 +40,8 @@ export type QuoteListRow = {
   sentAt: string | null
   validUntil: string | null
   projectReference: string | null
+  /** How many lines the quote holds. A quote with none is a quote nobody wrote. */
+  lineCount: number
   totals: QuoteTotals
 }
 
@@ -225,6 +227,8 @@ type QuoteListRowResponse = {
   valid_until: string | null
   clients: { full_name: string } | null
   projects: { reference: string } | null
+  /** An embedded aggregate, which PostgREST answers as a one-element array. */
+  quote_items: { count: number }[]
 }
 
 /**
@@ -250,7 +254,7 @@ export async function listQuotes(
   let query = supabase
     .from('quotes')
     .select(
-      'id, reference, title, status, client_id, created_at, sent_at, valid_until, clients(full_name), projects(reference)',
+      'id, reference, title, status, client_id, created_at, sent_at, valid_until, clients(full_name), projects(reference), quote_items(count)',
       { count: 'exact' },
     )
 
@@ -320,6 +324,7 @@ export async function listQuotes(
     sentAt: row.sent_at,
     validUntil: row.valid_until,
     projectReference: row.projects?.reference ?? null,
+    lineCount: row.quote_items[0]?.count ?? 0,
     totals: totals.get(row.id) ?? ZERO_TOTALS,
   }))
 

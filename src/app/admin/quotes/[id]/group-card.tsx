@@ -147,10 +147,10 @@ export function GroupCard({
               <col className="w-20" />
               <col />
               <col className="w-32" />
-              <col className="w-28" />
               <col className="w-24" />
               <col className="w-16" />
               <col className="w-28" />
+              <col className="w-20" />
               <col className="w-16" />
             </colgroup>
             <thead>
@@ -164,9 +164,6 @@ export function GroupCard({
                 <th scope="col" className="border-b border-line-soft px-3 py-1.5 text-left text-2xs font-medium tracking-[0.05em] text-faint uppercase">
                   Concepto
                 </th>
-                <th scope="col" className="border-b border-line-soft px-3 py-1.5 text-center text-2xs font-medium tracking-[0.05em] text-faint uppercase">
-                  Cuenta como
-                </th>
                 <th scope="col" className="border-b border-line-soft px-3 py-1.5 text-right text-2xs font-medium tracking-[0.05em] text-faint uppercase">
                   Cantidad
                 </th>
@@ -178,6 +175,13 @@ export function GroupCard({
                 </th>
                 <th scope="col" className="border-b border-line-soft px-3 py-1.5 text-right text-2xs font-medium tracking-[0.05em] text-faint uppercase">
                   Importe
+                </th>
+                <th
+                  scope="col"
+                  title="Un extra opcional queda fuera del total hasta que el cliente lo marca"
+                  className="border-b border-line-soft px-3 py-1.5 text-center text-2xs font-medium tracking-[0.05em] text-faint uppercase"
+                >
+                  Opcional
                 </th>
                 <th scope="col" className="border-b border-line-soft px-3 py-1.5">
                   <span className="sr-only">Acciones</span>

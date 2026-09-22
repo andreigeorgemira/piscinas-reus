@@ -18,13 +18,5 @@ export const NUMBER_INPUT_CLASS =
 export const NAME_INPUT_CLASS =
   'num-none w-full rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-medium text-ink outline-none hover:border-line focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent/25'
 
-/** One half of the Base / Opcional switch. */
-export function segmentClass(active: boolean, tone: 'base' | 'optional'): string {
-  if (!active) return 'h-[22px] px-2 text-2xs text-muted transition-colors hover:text-ink'
-  return tone === 'optional'
-    ? 'h-[22px] px-2 text-2xs font-medium text-accent-ink bg-accent'
-    : 'h-[22px] px-2 text-2xs font-medium text-canvas bg-ink'
-}
-
 export const ROW_ICON_BUTTON_CLASS =
   'flex size-6 items-center justify-center rounded-md text-faint transition-colors hover:bg-surface-sunk hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:opacity-50'

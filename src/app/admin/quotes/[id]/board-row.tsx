@@ -6,7 +6,7 @@ import { idleState, type ActionState } from '@/app/admin/action-state'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Tooltip } from '@/components/ui/tooltip'
 import { formatEuros, formatMoney } from '@/lib/price-book/decimal'
-import { UNIT_LABELS } from '@/lib/price-book/schema'
+import { UNIT_LABELS, UNIT_TYPES } from '@/lib/price-book/schema'
 import type { BoardConcept } from '@/lib/quotes/board'
 import { formatQuantity } from '@/lib/quotes/quantity'
 import type { QuoteItem } from '@/lib/quotes/queries'
@@ -18,7 +18,6 @@ import {
   NUMBER_FIELD_CLASS,
   NUMBER_INPUT_CLASS,
   ROW_ICON_BUTTON_CLASS,
-  segmentClass,
 } from './board-ui'
 
 const ICON_PROPS = {
@@ -84,6 +83,7 @@ export function BoardRow({
   const name = line?.name ?? concept?.name ?? ''
   const unit = line?.unit ?? concept?.unit ?? 'unit'
   const chosen = line !== null
+  const optional = line?.isRecommended === true
 
   /**
    * The tick flips before the server has answered.
@@ -95,6 +95,9 @@ export function BoardRow({
    * itself when the real value arrives with the next render.
    */
   const [optimisticChosen, setOptimisticChosen] = useOptimistic(chosen)
+
+  /** The same, for the optional flag: a tick has to land when it is clicked. */
+  const [optimisticOptional, setOptimisticOptional] = useOptimistic(optional)
 
   /**
    * Saves only when something actually changed.
@@ -123,6 +126,7 @@ export function BoardRow({
 
   function runKind(nextKind: 'base' | 'optional') {
     startAction(async () => {
+      setOptimisticOptional(nextKind === 'optional')
       const data = new FormData()
       data.set('quote_id', quoteId)
       data.set('id', line!.id)
@@ -157,7 +161,6 @@ export function BoardRow({
   }
 
   const total = line ? lineTotal(line) : 0
-  const optional = line?.isRecommended === true
   const busy = pending || saving
 
   return (
@@ -229,38 +232,18 @@ export function BoardRow({
                 línea libre
               </span>
             ) : null}
-            <span className="shrink-0 text-2xs text-faint">{UNIT_LABELS[unit]}</span>
+            {/*
+              No unit here. Whoever writes a quote knows how excavation is
+              measured, and the column repeated it on every row for nobody; a
+              ticked row shows it inside the quantity field, where it is also
+              changed.
+            */}
           </div>
-        </td>
-
-        <td className={`${CELL_CLASS} text-center`}>
-          {chosen ? (
-            <div className="inline-flex overflow-hidden rounded-full border border-line bg-surface">
-              <button
-                type="button"
-                disabled={!editable || busy}
-                onClick={() => runKind('base')}
-                aria-pressed={!optional}
-                className={segmentClass(!optional, 'base')}
-              >
-                Base
-              </button>
-              <button
-                type="button"
-                disabled={!editable || busy}
-                onClick={() => runKind('optional')}
-                aria-pressed={optional}
-                className={segmentClass(optional, 'optional')}
-              >
-                Opcional
-              </button>
-            </div>
-          ) : null}
         </td>
 
         <td className={`${CELL_CLASS} text-right`}>
           {chosen ? (
-            <label className={NUMBER_FIELD_CLASS}>
+            <label className={`${NUMBER_FIELD_CLASS} relative pr-1`}>
               <span className="sr-only">{`Cantidad de ${name}`}</span>
               <input
                 form={formId}
@@ -269,11 +252,30 @@ export function BoardRow({
                 defaultValue={formatQuantity(line.quantity)}
                 disabled={!editable}
                 onBlur={(event) => saveIfChanged(event.currentTarget.form)}
-                className={`${NUMBER_INPUT_CLASS} w-14 font-medium`}
+                className={`${NUMBER_INPUT_CLASS} w-12 font-medium`}
               />
-              <span aria-hidden="true" className="text-2xs text-faint">
-                {UNIT_LABELS[unit]}
-              </span>
+              {/*
+                The unit belongs to THIS line, not to the catalogue: quote_items
+                copies it (0001_core_schema.sql), so changing it here prices one
+                job in hours without touching the tariff everyone else quotes
+                from. Bare, with no border of its own, so the pair reads as one
+                measurement rather than two controls.
+              */}
+              <select
+                form={formId}
+                name="unit"
+                defaultValue={unit}
+                disabled={!editable}
+                onChange={(event) => saveIfChanged(event.currentTarget.form)}
+                aria-label={`Unidad de ${name}`}
+                className="num cursor-pointer appearance-none bg-transparent text-2xs text-muted outline-none focus-visible:text-ink disabled:cursor-default"
+              >
+                {UNIT_TYPES.map((option) => (
+                  <option key={option} value={option}>
+                    {UNIT_LABELS[option]}
+                  </option>
+                ))}
+              </select>
             </label>
           ) : (
             <span className="num text-xs text-faint">—</span>
@@ -338,6 +340,28 @@ export function BoardRow({
           {chosen ? formatEuros(total) : ''}
         </td>
 
+        <td className={`${CELL_CLASS} text-center`}>
+          {chosen ? (
+            /*
+              One checkbox, at the end of the row, in place of the Base |
+              Opcional switch that used to sit in the middle of it. Everything a
+              quote carries is part of the price; an extra is the exception, and
+              an exception is a box you tick, not a state you pick between two
+              named halves.
+            */
+            <label className="inline-flex items-center justify-center">
+              <span className="sr-only">{`Marcar ${name} como extra opcional`}</span>
+              <input
+                type="checkbox"
+                checked={optimisticOptional}
+                disabled={!editable}
+                onChange={(event) => runKind(event.target.checked ? 'optional' : 'base')}
+                className="size-4 accent-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+              />
+            </label>
+          ) : null}
+        </td>
+
         <td className={CELL_CLASS}>
           {/*
             The form lives in a cell and the fields above join it by id: a
@@ -356,7 +380,6 @@ export function BoardRow({
               <>
                 <input type="hidden" name="id" value={line.id} />
                 <input type="hidden" name="quote_id" value={quoteId} />
-                <input type="hidden" name="unit" value={unit} />
                 <input type="hidden" name="unit_cost" value={formatMoney(line.unitCost)} />
                 <input type="hidden" name="description" value={line.description ?? ''} />
                 {/* An unchecked checkbox posts nothing, so the flag rides as a

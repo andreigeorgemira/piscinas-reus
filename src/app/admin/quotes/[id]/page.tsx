@@ -10,7 +10,7 @@ import { buildBoard } from '@/lib/quotes/board'
 import { getQuote } from '@/lib/quotes/queries'
 import { isEditable } from '@/lib/quotes/status'
 import { GroupCard } from './group-card'
-import { QuoteActions } from './quote-actions'
+import { DeleteQuoteButton } from './quote-actions'
 import { QuoteDetailsButton } from './quote-details'
 import { QuoteTotalsBar } from './quote-totals'
 
@@ -149,11 +149,11 @@ export default async function QuoteEditorPage({
           </svg>
           Presupuestos
         </Link>
-        <QuoteDetailsButton quote={quote} clients={clients} editable={editable} />
-        <QuoteActions quote={quote} />
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-6 py-2.5">
+        <QuoteDetailsButton quote={quote} clients={clients} editable={editable} />
+
         {/* A GET form, so the filter is in the address: linkable, and working
             before any JavaScript has loaded. */}
         <form action={base} className="flex items-center gap-2">
@@ -161,7 +161,7 @@ export default async function QuoteEditorPage({
             <input type="hidden" name="book" value={query.book} />
           ) : null}
           {query.chosen ? <input type="hidden" name="chosen" value="1" /> : null}
-          <div className="flex h-9 w-80 items-center gap-2 rounded-lg border border-line bg-canvas px-3 focus-within:border-accent focus-within:bg-surface focus-within:ring-2 focus-within:ring-[var(--accent-soft)]">
+          <div className="flex h-9 w-64 items-center gap-2 rounded-lg border border-line bg-canvas px-3 focus-within:border-accent focus-within:bg-surface focus-within:ring-2 focus-within:ring-[var(--accent-soft)]">
             <svg
               width="15"
               height="15"
@@ -218,13 +218,12 @@ export default async function QuoteEditorPage({
         {/*
           One link per book, not a select: the editor is server-rendered and a
           book is a place -- an address worth sending to someone. With one book
-          there is nothing to choose, so nothing is shown.
+          there is nothing to choose, so nothing is shown, and the buttons carry
+          the books' own names rather than a "Tarifario" label in front of them:
+          this strip has to stay on one line.
         */}
         {books.length > 1 ? (
           <div className="flex items-center gap-1.5">
-            <span className="text-2xs font-medium tracking-[0.05em] text-faint uppercase">
-              Tarifario
-            </span>
             {books.map((candidate) => (
               <Link
                 key={candidate.id}
@@ -242,12 +241,47 @@ export default async function QuoteEditorPage({
           </div>
         ) : null}
 
-        <span className="num ml-auto text-xs text-muted">
-          {`${board.lineCount} ${board.lineCount === 1 ? 'línea' : 'líneas'} en ${board.sectionsWithLines} ${board.sectionsWithLines === 1 ? 'grupo' : 'grupos'}`}
+        <span className="ml-auto" />
+
+        {/*
+          There is no Guardar button because there is nothing to save: every box
+          writes when you leave it. Saying so is the difference between a screen
+          that feels automatic and one that feels like it lost your work.
+        */}
+        <span
+          title="Cada cambio se guarda al salir del campo. No hay botón de guardar."
+          className="flex items-center gap-1.5 text-xs text-muted"
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-success"
+            aria-hidden="true"
+          >
+            <path d="m3.2 8.4 3.2 3.2 6.4-6.8" />
+          </svg>
+          Se guarda solo
         </span>
+
+        <DeleteQuoteButton quote={quote} />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+      {/*
+        `relative` is load-bearing, not decoration. Tailwind's `sr-only` is
+        `position: absolute`, and an absolutely positioned element is clipped by
+        its CONTAINING BLOCK, not by whatever scrolls: with no positioned
+        ancestor, every hidden label in every row was placed against the document
+        and stretched it to the height of the whole catalogue -- a page-tall empty
+        scrollbar next to a screen that fits. Giving the scrolling box a
+        containing block keeps them inside it.
+      */}
+      <div className="relative min-h-0 flex-1 overflow-y-auto px-6 py-4">
         {catalogue.capped ? (
           <p className="mb-3 rounded-lg border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn">
             Este tarifario tiene {catalogue.conceptCount} conceptos y la pantalla muestra los
@@ -313,7 +347,10 @@ export default async function QuoteEditorPage({
         )}
       </div>
 
-      <QuoteTotalsBar totals={quote.totals} />
+      <QuoteTotalsBar
+        totals={quote.totals}
+        summary={`${board.lineCount} ${board.lineCount === 1 ? 'línea' : 'líneas'} en ${board.sectionsWithLines} ${board.sectionsWithLines === 1 ? 'grupo' : 'grupos'}`}
+      />
     </>
   )
 }

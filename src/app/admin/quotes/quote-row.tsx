@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { formatEuros } from '@/lib/price-book/decimal'
 import type { QuoteListRow } from '@/lib/quotes/queries'
-import { StatusBadge } from './status-badge'
+import { QuoteRowActions, QuoteStatusControl, type QuoteRowSummary } from './row-actions'
 
 const CELL_CLASS = 'border-b border-line-soft px-3 py-2.5 align-middle'
 
@@ -15,12 +15,24 @@ function formatDate(value: string | null): string {
 /**
  * One quote in the list.
  *
- * A server component, unlike the client and price-book rows: nothing in it is
- * interactive. Everything a quote can have done to it happens on its own screen,
- * where the lines are visible -- sending a quote from a list, without seeing what
- * is on it, is how the wrong figure reaches a client.
+ * The row is a place you can act from, not only a link to somewhere you can act:
+ * the status is changed here (the badge is the control), and the two things worth
+ * doing without opening the quote -- copying it, binning it -- live in the last
+ * cell. Writing the quote is still the editor's job; deciding what happened to a
+ * document you already wrote is this screen's.
  */
 export function QuoteRow({ quote }: { quote: QuoteListRow }) {
+  const summary: QuoteRowSummary = {
+    id: quote.id,
+    reference: quote.reference,
+    title: quote.title,
+    status: quote.status,
+    clientName: quote.clientName,
+    lineCount: quote.lineCount,
+    projectReference: quote.projectReference,
+    grandTotal: quote.totals.grandTotal,
+  }
+
   return (
     <tr className="group/row relative transition-colors hover:bg-surface-hover">
       <td className={CELL_CLASS}>
@@ -48,10 +60,13 @@ export function QuoteRow({ quote }: { quote: QuoteListRow }) {
         )}
       </td>
       <td className={CELL_CLASS}>
-        <StatusBadge status={quote.status} />
+        <QuoteStatusControl quote={summary} />
         {quote.projectReference ? (
           <span className="num block pt-0.5 text-2xs text-faint">{quote.projectReference}</span>
         ) : null}
+      </td>
+      <td className={`${CELL_CLASS} num text-right ${quote.lineCount === 0 ? 'text-faint' : 'text-muted'}`}>
+        {quote.lineCount}
       </td>
       <td className={`${CELL_CLASS} num text-muted`}>{formatDate(quote.createdAt)}</td>
       <td className={`${CELL_CLASS} num text-muted`}>{formatDate(quote.validUntil)}</td>
@@ -60,6 +75,9 @@ export function QuoteRow({ quote }: { quote: QuoteListRow }) {
       </td>
       <td className={`${CELL_CLASS} num text-right text-faint`}>
         {formatEuros(quote.totals.margin)}
+      </td>
+      <td className={CELL_CLASS}>
+        <QuoteRowActions quote={summary} />
       </td>
     </tr>
   )
