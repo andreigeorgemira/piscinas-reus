@@ -17,6 +17,10 @@ import type { NextConfig } from 'next'
  */
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR ?? '.next',
+  // Development only. In any corner it sat on something staff click: the
+  // account menu (bottom-left), the quote totals (bottom-right), the header
+  // actions (top-right).
+  devIndicators: false,
 }
 
 export default nextConfig

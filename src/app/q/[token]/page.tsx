@@ -71,7 +71,7 @@ export default async function PublicQuotePage({ params }: PageProps<'/q/[token]'
           <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-ink px-6 py-6 sm:px-8">
             <div>
               <div className="flex items-center gap-2.5">
-                <span className="flex size-7 items-center justify-center rounded-md bg-ink">
+                <span className="flex size-7 items-center justify-center rounded-md bg-primary">
                   <svg
                     width="17"
                     height="17"
@@ -99,7 +99,7 @@ export default async function PublicQuotePage({ params }: PageProps<'/q/[token]'
               </p>
             </div>
 
-            <div className="text-right">
+            <div className="sm:text-right">
               <span className="text-2xs font-medium tracking-[0.08em] text-faint uppercase">
                 Presupuesto
               </span>

@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
  *
  * One component rather than a copy per screen, because the thing that makes
  * a dashboard feel like one tool is that this strip is the same height and
- * the same weight everywhere -- h-14, matching the brand block across the
+ * the same weight everywhere -- h-16, matching the brand block across the
  * sidebar seam.
  */
 export function PageHeader({
@@ -21,10 +21,10 @@ export function PageHeader({
   children?: ReactNode
 }) {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-5">
-      <h1 className="text-lg font-semibold -tracking-[0.01em]">{title}</h1>
-      {meta ? <span className="text-xs text-faint">{meta}</span> : null}
-      {children ? <div className="ml-auto flex items-center gap-2">{children}</div> : null}
+    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-6">
+      <h1 className="text-xl font-semibold -tracking-[0.02em] text-ink">{title}</h1>
+      {meta ? <span className="min-w-0 truncate text-xs text-muted">{meta}</span> : null}
+      {children ? <div className="ml-auto flex shrink-0 items-center gap-2">{children}</div> : null}
     </header>
   )
 }

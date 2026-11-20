@@ -9,7 +9,7 @@ import type { AdminUser } from './user-menu'
  * The frame every admin screen renders inside: a sidebar on the left, the
  * page's own header and content on the right.
  *
- * The brand block and the page header are both h-14 and both carry a bottom
+ * The brand block and the page header are both h-16 and both carry a bottom
  * border, so the two rules meet across the seam and the screen reads as one
  * bar rather than two that nearly line up.
  *

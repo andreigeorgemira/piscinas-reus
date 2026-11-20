@@ -49,7 +49,7 @@ export function Sidebar({
           onClick={toggle}
           aria-label={collapsed ? 'Expandir menú' : 'Contraer menú'}
           aria-expanded={!collapsed}
-          className="absolute top-[18px] -right-2.5 z-20 flex size-5 items-center justify-center rounded-full border border-line bg-surface text-muted shadow-card transition-colors hover:border-faint hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          className="absolute top-[22px] -right-2.5 z-20 flex size-5 items-center justify-center rounded-full border border-line bg-surface text-muted shadow-card transition-colors hover:border-faint hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           <svg
             width="11"
@@ -69,18 +69,18 @@ export function Sidebar({
       </Tooltip>
 
       <div
-        className={`flex h-14 shrink-0 items-center border-b border-shell-line ${
-          collapsed ? 'justify-center px-0' : 'gap-2.5 px-4'
+        className={`flex h-16 shrink-0 items-center border-b border-shell-line ${
+          collapsed ? 'justify-center px-0' : 'gap-3 px-4'
         }`}
       >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-shell-active">
+        <span className="flex size-9 shrink-0 items-center justify-center brand-mark rounded-xl">
           <svg
             width="18"
             height="18"
             viewBox="0 0 20 20"
             fill="none"
-            stroke="var(--accent)"
-            strokeWidth="1.6"
+            stroke="#ffffff"
+            strokeWidth="1.7"
             strokeLinecap="round"
             strokeLinejoin="round"
             aria-hidden="true"
@@ -93,10 +93,10 @@ export function Sidebar({
         </span>
         {collapsed ? null : (
           <span className="flex min-w-0 flex-col">
-            <span className="truncate text-sm font-semibold -tracking-[0.01em] text-shell-ink">
+            <span className="truncate text-base font-semibold -tracking-[0.01em] text-shell-ink">
               Piscinas Reus
             </span>
-            <span className="text-2xs text-shell-faint">Panel interno</span>
+            <span className="text-2xs text-shell-faint">Panel de gestión</span>
           </span>
         )}
       </div>

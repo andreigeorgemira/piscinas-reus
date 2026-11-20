@@ -78,7 +78,7 @@ export function GroupCard({
     */
     <section
       aria-labelledby={headingId}
-      className={`overflow-hidden rounded-lg border bg-surface ${
+      className={`overflow-hidden rounded-xl border bg-surface ${
         section.lineCount > 0 ? 'border-line shadow-card' : 'border-line-soft'
       }`}
     >

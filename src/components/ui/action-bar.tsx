@@ -296,7 +296,7 @@ export function ActionBar({
                 <button
                   type="submit"
                   form={formId}
-                  className="flex h-8 items-center justify-center rounded-md border border-ink bg-ink text-xs font-medium text-canvas hover:bg-ink-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  className="flex h-8 items-center justify-center rounded-md border border-primary bg-primary text-xs font-medium text-primary-ink hover:border-primary-hover hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   Aplicar filtros
                 </button>

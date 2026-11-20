@@ -6,7 +6,7 @@ import { signIn, type SignInState } from '@/app/auth/actions'
 const initialState: SignInState = { error: null }
 
 const FIELD_CLASS =
-  'rounded-[5px] border border-line bg-surface px-3 py-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent'
+  'h-10 rounded-lg border border-line bg-surface px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent'
 
 export function LoginForm({ nextPath }: { nextPath: string | null }) {
   const [state, formAction, pending] = useActionState(signIn, initialState)
@@ -52,7 +52,7 @@ export function LoginForm({ nextPath }: { nextPath: string | null }) {
       <button
         type="submit"
         disabled={pending}
-        className="rounded-[5px] border border-ink bg-ink px-3 py-2 text-sm font-medium text-canvas hover:bg-ink-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
+        className="h-10 rounded-lg border border-primary bg-primary px-3 text-sm font-medium text-primary-ink hover:border-primary-hover hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
       >
         {pending ? 'Entrando…' : 'Entrar'}
       </button>

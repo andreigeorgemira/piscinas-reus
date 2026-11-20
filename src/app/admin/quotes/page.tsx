@@ -10,20 +10,24 @@ import { getCompanySettings } from '@/lib/settings/queries'
 import { listQuotes } from '@/lib/quotes/queries'
 import { QUOTE_STATUS_LABELS, QUOTE_STATUSES, type QuoteStatus } from '@/lib/quotes/status'
 import { NewQuoteButton } from './new-quote-dialog'
+import { countQuotesByStatus, StatusTabs } from './status-tabs'
 import { QuoteRow } from './quote-row'
 
 export const metadata: Metadata = { title: 'Presupuestos' }
 
 const COLUMNS: TableColumn[] = [
-  { key: 'reference', label: 'Referencia' },
-  { key: 'client', label: 'Cliente', width: 'w-52' },
-  { key: 'status', label: 'Estado', width: 'w-36' },
-  { key: 'lines', label: 'Líneas', width: 'w-20', align: 'right' },
-  { key: 'created', label: 'Creado', width: 'w-28' },
-  { key: 'valid', label: 'Válido hasta', width: 'w-32' },
+  // Fixed widths for the figures, the remainder for the client's name: the one
+  // column that can lose letters without losing meaning. The reference gets a
+  // width of its own -- left to the remainder it shrank to nothing at 1280px.
+  { key: 'reference', label: 'Referencia', width: 'w-40' },
+  { key: 'client', label: 'Cliente' },
+  { key: 'status', label: 'Estado', width: 'w-32' },
+  { key: 'lines', label: 'Líneas', width: 'w-16', align: 'right' },
+  { key: 'created', label: 'Creado', width: 'w-24' },
+  { key: 'valid', label: 'Válido hasta', width: 'w-28' },
   { key: 'total', label: 'Total sin IVA', width: 'w-32', align: 'right' },
   { key: 'margin', label: 'Margen', width: 'w-28', align: 'right' },
-  { key: 'actions', label: 'Acciones', width: 'w-24', srOnly: true },
+  { key: 'actions', label: 'Acciones', width: 'w-16', srOnly: true },
 ]
 
 const FILTER_FIELD_CLASS =
@@ -69,7 +73,7 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
 
   const supabase = await requireAdmin()
 
-  const [listing, clients, settings] = await Promise.all([
+  const [listing, clients, settings, counts] = await Promise.all([
     listQuotes(supabase, {
       search: query.q,
       status: query.status === '' ? null : (query.status as QuoteStatus),
@@ -79,6 +83,7 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
     }),
     listClientOptions(supabase),
     getCompanySettings(supabase),
+    countQuotesByStatus(supabase),
   ])
 
   const filterCount = (query.status ? 1 : 0) + (query.client ? 1 : 0)
@@ -114,9 +119,16 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
             ? `${listing.total} ${listing.total === 1 ? 'resultado' : 'resultados'}`
             : `${listing.total} ${listing.total === 1 ? 'presupuesto' : 'presupuestos'}`
         }
-      />
+      >
+        <NewQuoteButton clients={clients} defaultVatRate={settings.defaultVatRate} />
+      </PageHeader>
 
-      <div className="min-h-0 flex-1 p-5">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-6">
+        <StatusTabs
+          current={query.status as QuoteStatus | ''}
+          counts={counts}
+          hrefFor={(status) => href({ status, page: 1 })}
+        />
         <DataTable
           columns={COLUMNS}
           toolbar={
@@ -166,9 +178,7 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
                   </label>
                 </div>
               }
-            >
-              <NewQuoteButton clients={clients} defaultVatRate={settings.defaultVatRate} />
-            </ActionBar>
+            />
           }
           empty={
             listing.quotes.length === 0 ? (

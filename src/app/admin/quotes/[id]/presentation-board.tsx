@@ -59,7 +59,7 @@ export function PresentationBoard({
 
   if (sections.length === 0) {
     return (
-      <p className="rounded-lg border border-line bg-surface px-5 py-12 text-center text-sm text-muted">
+      <p className="rounded-xl border border-line bg-surface px-5 py-12 text-center text-sm text-muted">
         El presupuesto todavía no tiene líneas. Añádelas desde «Todo el tarifario».
       </p>
     )
@@ -118,7 +118,7 @@ function SectionCard({
   const headingId = useId()
 
   return (
-    <section aria-labelledby={headingId} className="overflow-hidden rounded-lg border border-line bg-surface">
+    <section aria-labelledby={headingId} className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
       <header className="flex flex-wrap items-center gap-2 border-b border-line-soft px-3 py-2">
         {editable && section.groupName !== null ? (
           <MoveButtons quoteId={quoteId} groupName={section.groupName} first={first} last={last} />
@@ -318,7 +318,7 @@ function DisplaySwitch({
   const [, formAction, pending] = useToastedAction(setGroupDisplay)
 
   return (
-    <form action={formAction} role="radiogroup" aria-label={`Qué ve el cliente de ${groupName}`} className="flex overflow-hidden rounded-md border border-line">
+    <form action={formAction} role="radiogroup" aria-label={`Qué ve el cliente de ${groupName}`} className="flex rounded-lg bg-surface p-0.5 ring-1 ring-line">
       <input type="hidden" name="quote_id" value={quoteId} />
       <input type="hidden" name="group_name" value={groupName} />
       {GROUP_DISPLAYS.map((mode) => {
@@ -332,8 +332,8 @@ function DisplaySwitch({
             role="radio"
             aria-checked={current}
             disabled={!editable || pending || current}
-            className={`h-7 px-2.5 text-2xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent ${
-              current ? 'bg-ink font-medium text-canvas' : 'bg-surface text-muted hover:bg-surface-hover disabled:hover:bg-surface'
+            className={`h-7 rounded-md px-2.5 text-2xs font-medium transition-[background-color,color] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent ${
+              current ? 'bg-accent-soft text-accent' : 'text-muted hover:text-ink disabled:hover:text-muted'
             }`}
           >
             {GROUP_DISPLAY_LABELS[mode]}

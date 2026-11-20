@@ -37,7 +37,7 @@ export default async function PriceBooksPage() {
         }
       />
 
-      <div className="min-h-0 flex-1 p-5">
+      <div className="min-h-0 flex-1 p-6">
         <DataTable
           columns={COLUMNS}
           empty={

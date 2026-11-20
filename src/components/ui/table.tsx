@@ -48,7 +48,7 @@ export function DataTable({
      * a flex child's default min-height is its content, so without it the
      * card grows to fit every row and the scrollbar lands on the page.
      */
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-card">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-card">
       {toolbar}
       {/*
         `relative` for the same reason the quote editor's scroll area carries it:

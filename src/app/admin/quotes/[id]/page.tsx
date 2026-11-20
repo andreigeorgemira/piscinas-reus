@@ -198,7 +198,6 @@ export default async function QuoteEditorPage({
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-6 py-2.5">
-        <QuoteDetailsButton quote={quote} clients={clients} editable={editable} />
 
         {/* A GET form, so the filter is in the address: linkable, and working
             before any JavaScript has loaded. */}
@@ -236,7 +235,9 @@ export default async function QuoteEditorPage({
           </button>
         </form>
 
-        <div className="flex overflow-hidden rounded-lg border border-line">
+        {/* The three ways of looking at the quote, first: they decide what the
+            rest of the bar does. */}
+        <div className="order-first flex rounded-lg bg-surface-sunk p-0.5" role="group" aria-label="Vista">
           {(
             [
               { label: 'Todo el tarifario', to: { chosen: false, presentation: false }, on: !query.chosen && !query.presentation },
@@ -248,8 +249,8 @@ export default async function QuoteEditorPage({
               key={tab.label}
               href={href(tab.to)}
               aria-current={tab.on ? 'true' : undefined}
-              className={`flex h-9 items-center px-3 text-xs transition-colors ${
-                tab.on ? 'bg-ink font-medium text-canvas' : 'bg-surface text-muted hover:bg-surface-hover'
+              className={`flex h-8 items-center rounded-md px-3 text-xs font-medium transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+                tab.on ? 'bg-surface text-ink shadow-card ring-1 ring-line' : 'text-muted hover:text-ink'
               }`}
             >
               {tab.label}
@@ -270,12 +271,28 @@ export default async function QuoteEditorPage({
 
         <span className="ml-auto" />
 
+        <QuoteDetailsButton quote={quote} clients={clients} editable={editable} />
+
+        {/* The document as it leaves the office, in a tab of its own. */}
+        <a
+          href={`${base}/pdf`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-medium text-ink-soft transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M9.4 2.4H4.6a1 1 0 0 0-1 1v9.2a1 1 0 0 0 1 1h6.8a1 1 0 0 0 1-1V5.4Z" />
+            <path d="M9.4 2.4v3h3" />
+          </svg>
+          PDF
+        </a>
+
         {/* Nothing to save on a quote whose lines are frozen. */}
         {editable ? <SaveNowButton /> : null}
 
         <SendQuoteButton
           quote={sendable}
-          className="flex h-9 items-center gap-1.5 rounded-lg border border-ink bg-ink px-3 text-xs font-medium text-canvas transition-colors hover:bg-ink-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          className="flex h-9 items-center gap-1.5 rounded-lg border border-primary bg-primary px-3 text-xs font-medium text-primary-ink transition-colors hover:border-primary-hover hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         />
 
         <QuoteMenu
@@ -363,7 +380,7 @@ export default async function QuoteEditorPage({
             editable={editable}
           />
         ) : board.sections.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-lg border border-line bg-surface px-5 py-16 text-center">
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-line bg-surface px-5 py-16 text-center">
             <span className="text-faint">
               <svg
                 width="28"

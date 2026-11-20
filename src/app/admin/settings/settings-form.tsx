@@ -220,7 +220,7 @@ export function SettingsForm({ settings }: { settings: CompanySettings }) {
         <button
           type="submit"
           disabled={pending}
-          className="ml-auto flex h-9 items-center rounded-md border border-ink bg-ink px-4 text-sm font-medium text-canvas hover:bg-ink-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
+          className="ml-auto flex h-9 items-center rounded-md border border-primary bg-primary px-4 text-sm font-medium text-primary-ink hover:border-primary-hover hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
         >
           {pending ? 'Guardando…' : 'Guardar ajustes'}
         </button>
