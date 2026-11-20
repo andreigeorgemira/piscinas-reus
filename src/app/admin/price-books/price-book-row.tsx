@@ -203,7 +203,7 @@ export function PriceBookRow({ book }: { book: PriceBook }) {
         title={`Borrar el tarifario «${book.name}»`}
         description="Se va el catálogo entero, no solo el nombre."
         risks={[
-          `Se borran sus ${book.groupCount} grupos y sus ${book.itemCount} conceptos. No se puede deshacer.`,
+          `Se borran ${book.groupCount === 1 ? 'su grupo' : `sus ${book.groupCount} grupos`} y ${book.itemCount === 1 ? 'su concepto' : `sus ${book.itemCount} conceptos`}. No se puede deshacer.`,
           'Los presupuestos ya hechos no cambian: cada línea guardó su nombre, su unidad y su precio cuando se escribió.',
           'Lo que pierden esos presupuestos es el enlace con el catálogo, igual que cuando se borra un concepto suelto.',
         ]}

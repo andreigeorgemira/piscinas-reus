@@ -5,6 +5,7 @@ import { requireAdmin } from '@/lib/auth/require-admin'
 import { listPriceBooks } from '@/lib/price-book/queries'
 import { NewPriceBookForm } from './new-price-book-form'
 import { PriceBookRow } from './price-book-row'
+import { plural } from '@/lib/plural'
 
 export const metadata: Metadata = { title: 'Tarifarios' }
 
@@ -32,9 +33,7 @@ export default async function PriceBooksPage() {
       <PageHeader
         title="Tarifarios"
         meta={
-          books.length === 1
-            ? `1 tarifario · ${totalItems} conceptos`
-            : `${books.length} tarifarios · ${totalItems} conceptos`
+          `${plural(books.length, 'tarifario', 'tarifarios')} · ${plural(totalItems, 'concepto', 'conceptos')}`
         }
       />
 

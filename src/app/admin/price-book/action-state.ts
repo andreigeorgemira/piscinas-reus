@@ -1,18 +1,13 @@
 /**
- * What every price-book Server Action returns, and the value its form starts
- * from.
- *
- * This lives beside actions.ts rather than inside it because a 'use server'
- * module may only export async functions: Next's actions loader re-exports
- * every export of such a module as a Server Action reference, and a plain
- * object makes the whole module fail to evaluate with "A 'use server' file
- * can only export async functions, found object." The forms need this value
- * as the seed for useActionState, so it needs a home a Client Component can
- * import from.
+ * The price-book screens' action state, which is every admin screen's action
+ * state: the definition moved to src/app/admin/action-state.ts when the client
+ * and quote screens needed it too. Re-exported from here so the imports in
+ * this folder keep pointing at the file next door.
  */
-export type ActionState = { error: string | null }
+import type { ActionState } from '@/app/admin/action-state'
 
-export const idleState: ActionState = { error: null }
+export { idleState } from '@/app/admin/action-state'
+export type { ActionState }
 
 /**
  * What moveItem returns. Besides the error, the code the concept could take

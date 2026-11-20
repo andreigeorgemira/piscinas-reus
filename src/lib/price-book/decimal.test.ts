@@ -20,14 +20,28 @@ describe('parseDecimal', () => {
     expect(parseDecimal('1234')).toBe(1234)
   })
 
-  it('reads a lone dot as a decimal point, not thousands grouping, when there is no comma', () => {
-    // '1.234' is ambiguous: it could mean one thousand two hundred thirty-four, or
-    // one point two three four. With no comma present there is no signal that the
-    // dot is grouping rather than decimal, so we read it the way the same keystrokes
-    // read on an English keyboard: 1.234. This is deliberate, not an oversight -- a
-    // wrong SMALL number is caught by eye when a staff member reviews the quote;
-    // a wrong LARGE number (1234 instead of 1.234) looks plausible and slips through.
-    expect(parseDecimal('1.234')).toBe(1.234)
+  it('reads dots that split the digits into threes as thousands grouping, the way every screen prints them', () => {
+    // Every figure in the app is printed Spanish-style ('1.234,56 €'), so a dot
+    // followed by exactly three digits is what staff type for thousands. Reading
+    // '2.000' as 2 was seen in the browser: a 2.000 € price saved as 2,00 €,
+    // silently. A wrong small number does NOT get caught by eye -- 2,00 € sat on a
+    // 40.000 € quote and only the client's total gave it away.
+    expect(parseDecimal('2.000')).toBe(2000)
+    expect(parseDecimal('1.234')).toBe(1234)
+    expect(parseDecimal('12.345.678')).toBe(12345678)
+    expect(parseDecimal('-1.500')).toBe(-1500)
+  })
+
+  it('still reads a dot as a decimal point when it is not grouping digits in threes', () => {
+    expect(parseDecimal('1.5')).toBe(1.5)
+    expect(parseDecimal('48.75')).toBe(48.75)
+    expect(parseDecimal('0.125')).toBe(0.125)
+    expect(parseDecimal('1234.5')).toBe(1234.5)
+  })
+
+  it('rejects dots that look like grouping but are not', () => {
+    expect(parseDecimal('1.23.456')).toBeNull()
+    expect(parseDecimal('1234.567.890')).toBeNull()
   })
 
   it('trims surrounding whitespace and a trailing euro sign', () => {

@@ -8,11 +8,13 @@ import { Tooltip } from '@/components/ui/tooltip'
 type NavItem = { href: string; label: string; icon: ReactNode }
 
 /**
- * No sections. Two entries do not need headings over them, and the app is
- * meant to stay small enough that they never will: the moment Clientes,
- * Presupuestos and Proyectos land they join this flat list. Only routes that
- * exist are here -- a sidebar that offers a dead link teaches staff to
- * distrust the whole thing.
+ * No sections. Four entries do not need headings over them, and the app is
+ * meant to stay small enough that they never will: the day Proyectos lands it
+ * joins this flat list. Only routes that exist are here -- a sidebar that
+ * offers a dead link teaches staff to distrust the whole thing.
+ *
+ * The order is the order of the work: a client comes in, a quote is written
+ * for them, and the tarifario is what the quote is written from.
  */
 const ITEMS: NavItem[] = [
   {
@@ -21,12 +23,42 @@ const ITEMS: NavItem[] = [
     icon: <path d="M2.5 6.8 8 2.5l5.5 4.3v6.2a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8Z" />,
   },
   {
+    href: '/admin/clients',
+    label: 'Clientes',
+    icon: (
+      <>
+        <circle cx="8" cy="5.6" r="2.6" />
+        <path d="M3 13.4c0-2.3 2.2-3.8 5-3.8s5 1.5 5 3.8" />
+      </>
+    ),
+  },
+  {
+    href: '/admin/quotes',
+    label: 'Presupuestos',
+    icon: (
+      <>
+        <path d="M3.4 2.6h9.2v10.8H3.4Z" />
+        <path d="M5.6 5.8h4.8M5.6 8h4.8M5.6 10.2h2.8" />
+      </>
+    ),
+  },
+  {
     href: '/admin/price-books',
     label: 'Tarifarios',
     icon: (
       <>
         <path d="M8.4 1.9H3.1a1.2 1.2 0 0 0-1.2 1.2v5.3c0 .3.1.6.4.8l5.6 5.6a1.2 1.2 0 0 0 1.7 0l4.5-4.5a1.2 1.2 0 0 0 0-1.7L8.5 3a1.2 1.2 0 0 0-.1-1.1Z" />
         <circle cx="5.2" cy="5.2" r="1" />
+      </>
+    ),
+  },
+  {
+    href: '/admin/settings',
+    label: 'Ajustes',
+    icon: (
+      <>
+        <circle cx="8" cy="8" r="2.1" />
+        <path d="M8 1.9v1.6M8 12.5v1.6M14.1 8h-1.6M3.5 8H1.9M12.3 3.7l-1.1 1.1M4.8 11.2l-1.1 1.1M12.3 12.3l-1.1-1.1M4.8 4.8 3.7 3.7" />
       </>
     ),
   },

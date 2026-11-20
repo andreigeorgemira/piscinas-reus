@@ -1,12 +1,12 @@
 import { roundMoney } from '@/lib/money'
 
-// Only a comma unambiguously signals "this is a decimal separator, everything
-// else is grouping" -- staff type prices the Spanish way (1.234,56), but the
-// same keystrokes on an English layout mean 1.234, not 1234. With no comma
-// present we cannot tell those two readings apart, so a lone dot is read as
-// a decimal point. See the '1.234' test case for why that side of the
-// ambiguity was chosen deliberately.
-//
+// A comma is the decimal separator whenever there is one, and every dot is
+// then grouping (1.234,56). Without a comma, dots that split the digits into
+// groups of three after a non-zero lead ('2.000', '12.345.678') are grouping
+// too: that is the shape every screen prints. Any other dot is a decimal point
+// ('1.5', '0.125'). See the '2.000' test case for the price this cost once.
+const THOUSANDS_ONLY_PATTERN = /^-?[1-9]\d{0,2}(\.\d{3})+$/
+
 // Validation happens against this ANCHORED pattern on purpose: an unanchored
 // regex (no ^/$) would accept '48abc' because it only needs to find a match
 // somewhere in the string, not consume all of it.
@@ -47,8 +47,15 @@ export function parseDecimal(raw: string): number | null {
     // '48,00,00') must survive normalisation as '48.00,00' and get caught by
     // the anchored pattern check, rather than being silently stripped.
     normalised = withoutCurrency.replace(/\./g, '').replace(',', '.')
+  } else if (THOUSANDS_ONLY_PATTERN.test(withoutCurrency)) {
+    // No comma, and dots that split the digits into threes: '2.000', '1.234.567'.
+    // That is how every screen in the app prints a figure, so it is what staff
+    // type for thousands -- and reading '2.000' as 2 saved a 2.000 € price as
+    // 2,00 € without a word.
+    normalised = withoutCurrency.replace(/\./g, '')
   } else {
-    // No comma: a dot, if present, is already the decimal separator.
+    // No comma and no grouping: a dot, if present, is the decimal separator
+    // ('1.5', '48.75', '0.125').
     normalised = withoutCurrency
   }
 
@@ -112,4 +119,9 @@ export function formatMoney(value: number): string {
  */
 export function formatEuros(value: number): string {
   return `${formatMoney(value)}\u00a0€`
+}
+
+/** A percentage the Spanish way: '10 %', '7,5 %'. */
+export function formatPercent(value: number): string {
+  return `${String(value).replace('.', ',')} %`
 }

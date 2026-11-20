@@ -210,10 +210,12 @@ describe('quote_totals', () => {
     expect(Number(data!.grand_total)).toBe(3390)
   })
 
-  it('reports cost and margin to an admin', async () => {
+  it('reports cost and margin to an admin, counting the extra the client ticked', async () => {
     const { data } = await staff.from('quote_totals').select('*').eq('quote_id', quoteId).single()
-    expect(Number(data!.cost_total)).toBe(1920)
-    expect(Number(data!.margin)).toBe(1180)
+    // 1920 of base cost plus the ticked extra's 2 x 60 (0019): the extra is in
+    // the total, so its cost is in the cost.
+    expect(Number(data!.cost_total)).toBe(2040)
+    expect(Number(data!.margin)).toBe(1350)
   })
 })
 
