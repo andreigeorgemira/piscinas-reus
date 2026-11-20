@@ -48,8 +48,8 @@ export async function updateCompanySettings(
     }
   }
 
-  revalidatePath('/admin/settings')
-  // The quote screens offer the VAT default and print the letterhead.
-  revalidatePath('/admin/quotes', 'layout')
+  // The whole panel: the sidebar shows the trade name, the quote screens offer
+  // the VAT default and print the letterhead.
+  revalidatePath('/admin', 'layout')
   return { error: null }
 }

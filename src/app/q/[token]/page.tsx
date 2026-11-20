@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { BrandMark } from '@/components/ui/brand-mark'
 import { formatEuros, formatPercent } from '@/lib/price-book/decimal'
 import { UNIT_LABELS } from '@/lib/price-book/schema'
 import { formatQuantity } from '@/lib/quotes/quantity'
@@ -11,7 +12,7 @@ import { Extras } from './extras'
 import { QuoteResponse } from './response'
 
 export const metadata: Metadata = {
-  title: 'Tu presupuesto · Piscinas Reus',
+  title: 'Tu presupuesto',
   // A quote is a private document behind a token. Nothing about it belongs in
   // an index, and the token itself must never end up in one.
   robots: { index: false, follow: false },
@@ -71,21 +72,7 @@ export default async function PublicQuotePage({ params }: PageProps<'/q/[token]'
           <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-ink px-6 py-6 sm:px-8">
             <div>
               <div className="flex items-center gap-2.5">
-                <span className="flex size-7 items-center justify-center rounded-md bg-primary">
-                  <svg
-                    width="17"
-                    height="17"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="var(--canvas)"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M2 10.4c1.2-1.4 2.4-1.4 3.6 0s2.4 1.4 3.6 0 2.4-1.4 3.6 0" />
-                    <path d="M2 6.4c1.2-1.4 2.4-1.4 3.6 0s2.4 1.4 3.6 0 2.4-1.4 3.6 0" />
-                  </svg>
-                </span>
+                <BrandMark name={quote.company.tradeName} size="sm" />
                 <span className="text-lg font-semibold -tracking-[0.02em]">
                   {quote.company.tradeName}
                 </span>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { BrandMark } from '@/components/ui/brand-mark'
 import { Tooltip } from '@/components/ui/tooltip'
 import { AdminNav } from './admin-nav'
 import { SIDEBAR_COOKIE } from './sidebar-cookie'
@@ -19,9 +20,12 @@ import { UserMenu, type AdminUser } from './user-menu'
 export function Sidebar({
   defaultCollapsed,
   user,
+  tradeName,
 }: {
   defaultCollapsed: boolean
   user: AdminUser
+  /** The company's name from Ajustes: the sidebar is its panel, not the app's. */
+  tradeName: string
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
 
@@ -73,28 +77,11 @@ export function Sidebar({
           collapsed ? 'justify-center px-0' : 'gap-3 px-4'
         }`}
       >
-        <span className="flex size-9 shrink-0 items-center justify-center brand-mark rounded-xl">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="#ffffff"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M2.5 13.8c1.1 0 1.1 1.1 2.2 1.1s1.1-1.1 2.2-1.1 1.1 1.1 2.2 1.1 1.1-1.1 2.2-1.1 1.1 1.1 2.2 1.1 1.1-1.1 2.2-1.1" />
-            <path d="M6 12.2V5.6a1.6 1.6 0 0 1 3.2 0" />
-            <path d="M13.4 12.2V4.8" />
-            <path d="M13.4 8.6H9.2" />
-          </svg>
-        </span>
+        <BrandMark name={tradeName} />
         {collapsed ? null : (
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-base font-semibold -tracking-[0.01em] text-shell-ink">
-              Piscinas Reus
+              {tradeName}
             </span>
             <span className="text-2xs text-shell-faint">Panel de gestión</span>
           </span>
