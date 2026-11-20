@@ -44,7 +44,7 @@ export default async function AdminLayout({ children }: LayoutProps<'/admin'>) {
     <AdminProviders>
       <div className="flex h-screen overflow-hidden bg-canvas text-ink">
         <Sidebar defaultCollapsed={collapsed} user={adminUser} />
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
       </div>
     </AdminProviders>
   )

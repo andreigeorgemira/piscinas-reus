@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { UnitType } from '@/lib/price-book/schema'
 import { escapeFilterTerm } from '@/lib/supabase/filters'
+import type { GroupDisplay, GroupSetting } from './presentation'
 import type { QuoteStatus } from './status'
 
 /** How many quotes one screen holds. */
@@ -26,6 +27,10 @@ export type QuoteTotals = {
   grandTotal: number
   costTotal: number
   margin: number
+  /** The quote's own VAT rate (0019). Null: the document carries no VAT. */
+  vatRate: number | null
+  vatTotal: number
+  totalWithVat: number
 }
 
 /** A quote as a list row shows it. */
@@ -77,6 +82,12 @@ export type QuoteItem = {
   id: string
   /** Where the line came from, when it came from the catalogue. Provenance only. */
   priceBookItemId: string | null
+  /**
+   * The code of that concept today, for a line shown outside its own book --
+   * a line from another price book is still a catalogue line, not a free one.
+   * Null for a free line, or when the concept has since been deleted.
+   */
+  priceBookCode: string | null
   groupName: string | null
   name: string
   description: string | null
@@ -109,6 +120,10 @@ export type QuoteDetail = {
   signedName: string | null
   signedAt: string | null
   rejectionReason: string | null
+  /** VAT charged on this quote (0019). Null: no VAT on the document. */
+  vatRate: number | null
+  /** How each group is presented to the client (public.quote_groups). */
+  groups: GroupSetting[]
   createdAt: string
   /**
    * Null until somebody puts a name on the quote: a price is often quoted
@@ -135,6 +150,9 @@ const ZERO_TOTALS: QuoteTotals = {
   grandTotal: 0,
   costTotal: 0,
   margin: 0,
+  vatRate: null,
+  vatTotal: 0,
+  totalWithVat: 0,
 }
 
 type TotalsRow = {
@@ -145,6 +163,9 @@ type TotalsRow = {
   grand_total: number
   cost_total: number
   margin: number
+  vat_rate: number | null
+  vat_total: number
+  total_with_vat: number
 }
 
 function toTotals(row: TotalsRow | undefined): QuoteTotals {
@@ -156,6 +177,9 @@ function toTotals(row: TotalsRow | undefined): QuoteTotals {
     grandTotal: row.grand_total,
     costTotal: row.cost_total,
     margin: row.margin,
+    vatRate: row.vat_rate === null ? null : Number(row.vat_rate),
+    vatTotal: row.vat_total,
+    totalWithVat: row.total_with_vat,
   }
 }
 
@@ -174,12 +198,15 @@ type ItemRow = {
   client_selected: boolean
   position: number
   created_at: string
+  /** The concept the line came from, embedded through price_book_item_id. */
+  price_book_items: { code: string | null } | null
 }
 
 function toItem(row: ItemRow): QuoteItem {
   return {
     id: row.id,
     priceBookItemId: row.price_book_item_id,
+    priceBookCode: row.price_book_items?.code ?? null,
     groupName: row.group_name,
     name: row.name,
     description: row.description,
@@ -196,7 +223,7 @@ function toItem(row: ItemRow): QuoteItem {
 }
 
 const ITEM_SELECT =
-  'id, price_book_item_id, group_name, name, description, unit, quantity, unit_cost, unit_price, discount_pct, is_recommended, client_selected, position, created_at'
+  'id, price_book_item_id, group_name, name, description, unit, quantity, unit_cost, unit_price, discount_pct, is_recommended, client_selected, position, created_at, price_book_items(code)'
 
 /**
  * Reads the totals of a set of quotes.
@@ -219,7 +246,9 @@ async function readTotals(
 
   const { data, error } = await supabase
     .from('quote_totals')
-    .select('quote_id, base_total, recommended_total, selected_extras_total, grand_total, cost_total, margin')
+    .select(
+      'quote_id, base_total, recommended_total, selected_extras_total, grand_total, cost_total, margin, vat_rate, vat_total, total_with_vat',
+    )
     .in('quote_id', quoteIds)
 
   if (error) throw error
@@ -372,7 +401,7 @@ export async function listQuoteItems(
 
   if (error) throw error
 
-  return (data as ItemRow[]).map(toItem)
+  return (data as unknown as ItemRow[]).map(toItem)
 }
 
 type QuoteDetailResponse = {
@@ -390,6 +419,7 @@ type QuoteDetailResponse = {
   signed_name: string | null
   signed_at: string | null
   rejection_reason: string | null
+  vat_rate: number | null
   created_at: string
   clients: {
     id: string
@@ -402,6 +432,7 @@ type QuoteDetailResponse = {
   } | null
   projects: { id: string; reference: string } | null
   quote_items: ItemRow[]
+  quote_groups: { name: string; position: number; display: GroupDisplay }[]
 }
 
 /**
@@ -421,10 +452,11 @@ export async function getQuote(
       .from('quotes')
       .select(
         `id, reference, title, status, start_date_planned, valid_until, client_notes, internal_notes,
-         access_token, sent_at, responded_at, signed_name, signed_at, rejection_reason, created_at,
+         access_token, sent_at, responded_at, signed_name, signed_at, rejection_reason, vat_rate, created_at,
          clients(id, full_name, email, phone, address, city, postal_code),
          projects(id, reference),
-         quote_items(${ITEM_SELECT})`,
+         quote_items(${ITEM_SELECT}),
+         quote_groups(name, position, display)`,
       )
       .eq('id', id)
       .order('position', { referencedTable: 'quote_items' })
@@ -454,6 +486,10 @@ export async function getQuote(
     signedName: row.signed_name,
     signedAt: row.signed_at,
     rejectionReason: row.rejection_reason,
+    vatRate: row.vat_rate === null ? null : Number(row.vat_rate),
+    groups: row.quote_groups
+      .map((group) => ({ name: group.name, position: group.position, display: group.display }))
+      .sort((a, b) => a.position - b.position),
     createdAt: row.created_at,
     client: row.clients
       ? {

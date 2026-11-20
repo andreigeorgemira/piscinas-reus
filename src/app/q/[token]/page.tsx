@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { formatEuros } from '@/lib/price-book/decimal'
+import { formatEuros, formatPercent } from '@/lib/price-book/decimal'
 import { UNIT_LABELS } from '@/lib/price-book/schema'
 import { formatQuantity } from '@/lib/quotes/quantity'
-import { formatSpanishDate, readPublicQuote } from '@/lib/quotes/public'
+import { formatSpanishDate, readPublicQuote, type PublicQuoteItem } from '@/lib/quotes/public'
+import { letterheadLines } from '@/lib/settings/letterhead'
+import { formatVatRate } from '@/lib/vat'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { Extras } from './extras'
 import { QuoteResponse } from './response'
@@ -48,6 +50,9 @@ export default async function PublicQuotePage({ params }: PageProps<'/q/[token]'
    * not an error, and the office would rather be rung than have the link die
    * silently. So the page says it plainly and leaves the buttons alone.
    */
+  // What the client is asked to pay: with VAT when the quote carries it.
+  const payable = quote.totals.vatRate === null ? quote.totals.grandTotal : quote.totals.totalWithVat
+
   const expired =
     open &&
     quote.validUntil !== null &&
@@ -81,12 +86,16 @@ export default async function PublicQuotePage({ params }: PageProps<'/q/[token]'
                     <path d="M2 6.4c1.2-1.4 2.4-1.4 3.6 0s2.4 1.4 3.6 0 2.4-1.4 3.6 0" />
                   </svg>
                 </span>
-                <span className="text-lg font-semibold -tracking-[0.02em]">Piscinas Reus</span>
+                <span className="text-lg font-semibold -tracking-[0.02em]">
+                  {quote.company.tradeName}
+                </span>
               </div>
               <p className="pt-2 text-xs leading-5 text-muted">
-                Construcción y mantenimiento de piscinas
-                <br />
-                Reus, Tarragona
+                {letterheadLines(quote.company).map((line) => (
+                  <span key={line} className="block">
+                    {line}
+                  </span>
+                ))}
               </p>
             </div>
 
@@ -150,28 +159,9 @@ export default async function PublicQuotePage({ params }: PageProps<'/q/[token]'
                   </span>
                 </div>
 
-                {group.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-line-soft py-2 last:border-0"
-                  >
-                    <span className="min-w-[10rem] flex-1 text-sm">
-                      {item.name}
-                      {item.description ? (
-                        <span className="block text-2xs text-muted">{item.description}</span>
-                      ) : null}
-                    </span>
-                    <span className="num w-24 text-right text-xs text-muted">
-                      {`${formatQuantity(item.quantity)} ${UNIT_LABELS[item.unit]}`}
-                    </span>
-                    <span className="num w-24 text-right text-xs text-muted">
-                      {formatEuros(item.unitPrice)}
-                    </span>
-                    <span className="num w-24 text-right text-sm font-medium">
-                      {formatEuros(item.lineTotal)}
-                    </span>
-                  </div>
-                ))}
+                {group.display === 'total_only'
+                  ? null
+                  : group.items.map((item) => <DocumentLine key={item.id} item={item} />)}
               </section>
             ))}
 
@@ -194,9 +184,15 @@ export default async function PublicQuotePage({ params }: PageProps<'/q/[token]'
               {quote.extras.length > 0 ? 'Total con lo que has marcado' : 'Total'}
             </span>
             <span className="num block pt-0.5 text-2xl font-semibold -tracking-[0.02em] text-shell-ink">
-              {formatEuros(quote.totals.grandTotal)}
+              {formatEuros(payable)}
             </span>
-            <span className="block pt-1 text-2xs text-shell-muted">IVA no incluido.</span>
+            {quote.totals.vatRate === null ? (
+              <span className="block pt-1 text-2xs text-shell-muted">IVA no incluido.</span>
+            ) : (
+              <span className="num block pt-1 text-2xs text-shell-muted">
+                {`Base imponible ${formatEuros(quote.totals.grandTotal)} · IVA ${formatVatRate(quote.totals.vatRate)} ${formatEuros(quote.totals.vatTotal)}`}
+              </span>
+            )}
           </div>
 
           <a
@@ -231,7 +227,9 @@ export default async function PublicQuotePage({ params }: PageProps<'/q/[token]'
           </section>
         ) : null}
 
-        {open ? <QuoteResponse token={token} total={quote.totals.grandTotal} /> : null}
+        {open ? (
+          <QuoteResponse token={token} total={payable} vatIncluded={quote.totals.vatRate !== null} />
+        ) : null}
 
         {quote.status === 'accepted' ? (
           <section className="rounded-xl border border-success/40 bg-success-soft p-5">
@@ -257,11 +255,40 @@ export default async function PublicQuotePage({ params }: PageProps<'/q/[token]'
           </section>
         ) : null}
 
-        <p className="pb-4 text-center text-2xs text-faint">
-          Las cantidades pueden ajustarse tras el replanteo en obra; cualquier cambio se comunica
-          antes de ejecutarlo.
-        </p>
+        {quote.company.quoteFooter ? (
+          <p className="pb-4 text-center text-2xs text-faint">{quote.company.quoteFooter}</p>
+        ) : null}
       </div>
     </main>
+  )
+}
+
+/**
+ * One line of a group the client sees in full, or without prices. In a group
+ * shown without prices the function sent no price at all (0019), so there is
+ * nothing to print but the quantity.
+ */
+function DocumentLine({ item }: { item: PublicQuoteItem }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-line-soft py-2 last:border-0">
+      <span className="min-w-[10rem] flex-1 text-sm">
+        {item.name}
+        {item.description ? <span className="block text-2xs text-muted">{item.description}</span> : null}
+      </span>
+      <span className="num w-24 text-right text-xs text-muted">
+        {`${formatQuantity(item.quantity)} ${UNIT_LABELS[item.unit]}`}
+      </span>
+      {item.unitPrice !== null && item.lineTotal !== null ? (
+        <>
+          <span className="num w-24 text-right text-xs text-muted">
+            {formatEuros(item.unitPrice)}
+            {item.discountPct ? (
+              <span className="block text-2xs text-warn">{`dto. ${formatPercent(item.discountPct)}`}</span>
+            ) : null}
+          </span>
+          <span className="num w-24 text-right text-sm font-medium">{formatEuros(item.lineTotal)}</span>
+        </>
+      ) : null}
+    </div>
   )
 }

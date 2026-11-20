@@ -1,15 +1,22 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getSiteUrl } from '@/lib/env'
 import type { UnitType } from '@/lib/price-book/schema'
+import { letterheadFromRow, type Letterhead, type LetterheadRow } from '@/lib/settings/letterhead'
+import type { GroupDisplay } from './presentation'
 import type { QuoteStatus } from './status'
 
 /**
  * The quote as the person holding the link may see it.
  *
- * The shape is whatever public.quote_by_token returns (0015_public_quote_link.sql),
- * and the list of fields here is the same list the function builds: cost,
- * margin and internal notes are absent from both, and the absence is enforced
- * there, not here. This module only gives it a name in TypeScript.
+ * The shape is whatever public.quote_by_token returns (last restated in
+ * 0019_quote_vat_and_presentation.sql), and the list of fields here is the same
+ * list the function builds: cost, margin and internal notes are absent from
+ * both, and the absence is enforced there, not here. This module only gives it
+ * a name in TypeScript.
+ *
+ * The price, discount and amount of a line are null when its group is not
+ * shown in detail: the function leaves them out, so there is nothing here to
+ * hide by accident.
  */
 export type PublicQuoteItem = {
   id: string
@@ -18,11 +25,29 @@ export type PublicQuoteItem = {
   description: string | null
   unit: UnitType
   quantity: number
-  unitPrice: number
-  discountPct: number
+  unitPrice: number | null
+  discountPct: number | null
   isRecommended: boolean
   clientSelected: boolean
+  lineTotal: number | null
+}
+
+/**
+ * An optional extra. Never hidden -- it is a choice with a price, and a choice
+ * without its price is not one -- so its figures are always there.
+ */
+export type PublicQuoteExtra = Omit<PublicQuoteItem, 'unitPrice' | 'discountPct' | 'lineTotal'> & {
+  unitPrice: number
+  discountPct: number
   lineTotal: number
+}
+
+/** One group of the document, in the order it is printed. */
+export type PublicQuoteGroup = {
+  name: string
+  display: GroupDisplay
+  items: PublicQuoteItem[]
+  subtotal: number
 }
 
 export type PublicQuote = {
@@ -38,6 +63,8 @@ export type PublicQuote = {
   signedName: string | null
   signedAt: string | null
   rejectionReason: string | null
+  /** Who the quote is from. */
+  company: Letterhead
   client: {
     fullName: string
     email: string
@@ -45,15 +72,19 @@ export type PublicQuote = {
     city: string | null
     postalCode: string | null
   } | null
-  /** Groups in the order the editor left them, each with its own subtotal. */
-  groups: { name: string; items: PublicQuoteItem[]; subtotal: number }[]
+  /** Groups in the order staff left them, each with its display and subtotal. */
+  groups: PublicQuoteGroup[]
   /** The optional extras, whatever group they were written in. */
-  extras: PublicQuoteItem[]
+  extras: PublicQuoteExtra[]
   totals: {
     baseTotal: number
     recommendedTotal: number
     selectedExtrasTotal: number
     grandTotal: number
+    /** The quote's VAT rate. Null: no VAT on this document. */
+    vatRate: number | null
+    vatTotal: number
+    totalWithVat: number
   }
 }
 
@@ -67,11 +98,11 @@ type RawItem = {
   description: string | null
   unit: UnitType
   quantity: string | number
-  unit_price: string | number
-  discount_pct: string | number
+  unit_price: string | number | null
+  discount_pct: string | number | null
   is_recommended: boolean
   client_selected: boolean
-  line_total: string | number
+  line_total: string | number | null
 }
 
 type RawQuote = {
@@ -87,6 +118,8 @@ type RawQuote = {
   signed_name: string | null
   signed_at: string | null
   rejection_reason: string | null
+  vat_rate: string | number | null
+  company: LetterheadRow
   client: {
     full_name: string
     email: string
@@ -94,12 +127,15 @@ type RawQuote = {
     city: string | null
     postal_code: string | null
   } | null
+  groups: { name: string | null; display: GroupDisplay; subtotal: string | number }[]
   items: RawItem[]
   totals: {
     base_total: string | number
     recommended_total: string | number
     selected_extras_total: string | number
     grand_total: string | number
+    vat_total: string | number
+    total_with_vat: string | number
   }
 }
 
@@ -112,6 +148,10 @@ function toNumber(value: string | number): number {
   return typeof value === 'number' ? value : Number(value)
 }
 
+function toNumberOrNull(value: string | number | null): number | null {
+  return value === null ? null : toNumber(value)
+}
+
 function toItem(raw: RawItem): PublicQuoteItem {
   return {
     id: raw.id,
@@ -120,11 +160,11 @@ function toItem(raw: RawItem): PublicQuoteItem {
     description: raw.description,
     unit: raw.unit,
     quantity: toNumber(raw.quantity),
-    unitPrice: toNumber(raw.unit_price),
-    discountPct: toNumber(raw.discount_pct),
+    unitPrice: toNumberOrNull(raw.unit_price),
+    discountPct: toNumberOrNull(raw.discount_pct),
     isRecommended: raw.is_recommended,
     clientSelected: raw.client_selected,
-    lineTotal: toNumber(raw.line_total),
+    lineTotal: toNumberOrNull(raw.line_total),
   }
 }
 
@@ -152,20 +192,15 @@ export async function readPublicQuote(
   const raw = data as RawQuote
   const items = raw.items.map(toItem)
 
-  // Grouped for the document, in the order the lines arrive (the function
-  // orders by position, which the editor keeps as the catalogue's order).
-  const groups: PublicQuote['groups'] = []
-  for (const item of items) {
-    if (item.isRecommended) continue
-    const name = item.groupName ?? UNGROUPED_SECTION
-    const last = groups.find((group) => group.name === name)
-    if (last) {
-      last.items.push(item)
-      last.subtotal += item.lineTotal
-      continue
-    }
-    groups.push({ name, items: [item], subtotal: item.lineTotal })
-  }
+  // The function names the groups, their order, display and subtotal -- the
+  // subtotal has to come from there, since a group that is not detailed sends
+  // its lines without amounts. The lines are filed under them by name.
+  const groups: PublicQuoteGroup[] = raw.groups.map((group) => ({
+    name: group.name ?? UNGROUPED_SECTION,
+    display: group.display,
+    subtotal: toNumber(group.subtotal),
+    items: items.filter((item) => !item.isRecommended && item.groupName === group.name),
+  }))
 
   return {
     id: raw.id,
@@ -180,6 +215,7 @@ export async function readPublicQuote(
     signedName: raw.signed_name,
     signedAt: raw.signed_at,
     rejectionReason: raw.rejection_reason,
+    company: letterheadFromRow(raw.company),
     client: raw.client
       ? {
           fullName: raw.client.full_name,
@@ -190,12 +226,22 @@ export async function readPublicQuote(
         }
       : null,
     groups,
-    extras: items.filter((item) => item.isRecommended),
+    extras: items
+      .filter((item) => item.isRecommended)
+      .map((item) => ({
+        ...item,
+        unitPrice: item.unitPrice ?? 0,
+        discountPct: item.discountPct ?? 0,
+        lineTotal: item.lineTotal ?? 0,
+      })),
     totals: {
       baseTotal: toNumber(raw.totals.base_total),
       recommendedTotal: toNumber(raw.totals.recommended_total),
       selectedExtrasTotal: toNumber(raw.totals.selected_extras_total),
       grandTotal: toNumber(raw.totals.grand_total),
+      vatRate: toNumberOrNull(raw.vat_rate),
+      vatTotal: toNumber(raw.totals.vat_total),
+      totalWithVat: toNumber(raw.totals.total_with_vat),
     },
   }
 }

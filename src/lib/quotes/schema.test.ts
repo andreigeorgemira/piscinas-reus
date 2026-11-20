@@ -5,6 +5,8 @@ import {
   quoteItemInputFromForm,
   quoteItemInputSchema,
   quoteItemInputToRow,
+  isPastDate,
+  todayInSpain,
 } from './schema'
 
 function form(fields: Record<string, string>): FormData {
@@ -46,6 +48,8 @@ describe('the quote form', () => {
       validUntil: '2026-03-15',
       clientNotes: 'Pago en tres plazos.',
       internalNotes: 'Ojo con el acceso de la máquina.',
+      // The form carries no vat_rate box: no VAT.
+      vatRate: null,
     })
   })
 
@@ -202,5 +206,25 @@ describe('a line with boxes left empty', () => {
     expect(!parsed.success && parsed.error.issues[0]?.message).toBe(
       'El precio no es un número válido.',
     )
+  })
+})
+
+describe('the quote VAT and validity', () => {
+  it('reads the VAT rate, and none as no VAT', () => {
+    const base = { clientId: '', title: 'Piscina', startDatePlanned: '', validUntil: '', clientNotes: '', internalNotes: '' }
+    expect(quoteInputSchema.parse({ ...base, vatRate: '10' }).vatRate).toBe(10)
+    expect(quoteInputSchema.parse({ ...base, vatRate: 'none' }).vatRate).toBeNull()
+    expect(quoteInputSchema.safeParse({ ...base, vatRate: '150' }).success).toBe(false)
+  })
+
+  it('knows a validity date that has already gone by', () => {
+    expect(isPastDate('2026-11-19', '2026-11-20')).toBe(true)
+    expect(isPastDate('2026-11-20', '2026-11-20')).toBe(false)
+    expect(isPastDate(null, '2026-11-20')).toBe(false)
+  })
+
+  it('takes today from Madrid, not from the server clock', () => {
+    // 23:30 UTC on the 20th is already the 21st in Madrid (UTC+1 in winter).
+    expect(todayInSpain(new Date('2026-11-20T23:30:00Z'))).toBe('2026-11-21')
   })
 })

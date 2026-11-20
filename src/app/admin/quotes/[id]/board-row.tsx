@@ -209,7 +209,9 @@ export function BoardRow({
           ) : (
             <span
               aria-hidden="true"
-              className="flex size-4 items-center justify-center rounded-[3px] bg-accent text-accent-ink"
+              className={`flex size-4 items-center justify-center rounded-[3px] text-accent-ink ${
+                editable ? 'bg-accent' : 'bg-faint'
+              }`}
             >
               <svg {...ICON_PROPS} width={10} height={10} strokeWidth={2.4}>
                 <path d="m3.6 8.4 3 3 5.8-6.4" />
@@ -218,7 +220,9 @@ export function BoardRow({
           )}
         </td>
 
-        <td className={`${CELL_CLASS} num h-10 text-2xs text-faint`}>{concept?.code ?? '—'}</td>
+        <td className={`${CELL_CLASS} num h-10 text-2xs text-faint`}>
+          {concept?.code ?? line?.priceBookCode ?? '—'}
+        </td>
 
         <td className={CELL_CLASS}>
           <div className="flex min-w-0 items-center gap-2">
@@ -247,9 +251,11 @@ export function BoardRow({
                 copia
               </span>
             ) : null}
+            {/* A line from another price book came from a catalogue all the
+                same: calling it "línea libre" read as if staff had typed it. */}
             {kind === 'loose' ? (
               <span className="shrink-0 rounded-full border border-dashed border-line px-1.5 text-[10px] text-muted">
-                línea libre
+                {line?.priceBookItemId ? 'otro tarifario' : 'línea libre'}
               </span>
             ) : null}
             {/*

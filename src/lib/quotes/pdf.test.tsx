@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { renderToBuffer } from '@react-pdf/renderer'
 import { describe, expect, it } from 'vitest'
+import type { Letterhead } from '@/lib/settings/letterhead'
 import { fromQuoteDetail, QuoteDocument, type QuoteDocumentData } from './pdf'
 import type { QuoteDetail, QuoteItem } from './queries'
 
@@ -15,9 +16,25 @@ import type { QuoteDetail, QuoteItem } from './queries'
  * APIs and does not run under jsdom.
  */
 
+const company: Letterhead = {
+  tradeName: 'Piscinas Reus',
+  tagline: 'Construcción y mantenimiento de piscinas',
+  legalName: 'Piscinas Reus S.L.',
+  taxId: 'B43123456',
+  address: 'Carrer Major 1',
+  postalCode: '43201',
+  city: 'Reus',
+  province: 'Tarragona',
+  phone: null,
+  email: null,
+  website: null,
+  quoteFooter: 'Las cantidades pueden ajustarse tras el replanteo.',
+}
+
 const base: QuoteDocumentData = {
   reference: 'Q-2026-0100',
   title: 'Piscina 8x4 con gresite',
+  company,
   issuedOn: '2026-09-22',
   validUntil: '2026-10-22',
   startDatePlanned: '2026-04-01',
@@ -31,6 +48,7 @@ const base: QuoteDocumentData = {
   groups: [
     {
       name: 'Revestimiento',
+      display: 'detailed',
       subtotal: 2405,
       items: [
         {
@@ -39,6 +57,7 @@ const base: QuoteDocumentData = {
           quantity: 74,
           unit: 'm2',
           unitPrice: 32.5,
+          discountPct: 0,
           lineTotal: 2405,
         },
       ],
@@ -51,6 +70,7 @@ const base: QuoteDocumentData = {
       quantity: 1,
       unit: 'unit',
       unitPrice: 980,
+      discountPct: 0,
       lineTotal: 980,
       selected: true,
     },
@@ -58,6 +78,9 @@ const base: QuoteDocumentData = {
   baseTotal: 2405,
   selectedExtrasTotal: 980,
   grandTotal: 3385,
+  vatRate: null,
+  vatTotal: 0,
+  totalWithVat: 3385,
   signature: null,
   draft: false,
 }
@@ -88,6 +111,25 @@ describe('the printed quote', () => {
     expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
   })
 
+  it('renders VAT, a discount and groups shown without prices', async () => {
+    const buffer = await renderToBuffer(
+      <QuoteDocument
+        quote={{
+          ...base,
+          vatRate: 21,
+          vatTotal: 710.85,
+          totalWithVat: 4095.85,
+          groups: [
+            { ...base.groups[0]!, display: 'no_prices', items: [{ ...base.groups[0]!.items[0]!, unitPrice: null, discountPct: null, lineTotal: null }] },
+            { name: 'Obra civil', display: 'total_only', subtotal: 9000, items: [] },
+          ],
+          extras: [{ ...base.extras[0]!, discountPct: 10, lineTotal: 882 }],
+        }}
+      />,
+    )
+    expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
+  })
+
   it('renders a draft, and one with no client', async () => {
     const buffer = await renderToBuffer(
       <QuoteDocument quote={{ ...base, draft: true, client: null, extras: [] }} />,
@@ -100,6 +142,7 @@ describe('the printed quote', () => {
 function line(overrides: Partial<QuoteItem> & { id: string }): QuoteItem {
   return {
     priceBookItemId: null,
+    priceBookCode: null,
     groupName: 'Estructura',
     name: 'Línea',
     description: null,
@@ -132,6 +175,8 @@ describe('the office adapter', () => {
     signedName: null,
     signedAt: null,
     rejectionReason: null,
+    vatRate: null,
+    groups: [],
     createdAt: '2026-09-22T09:00:00Z',
     client: null,
     project: null,
@@ -152,7 +197,7 @@ describe('the office adapter', () => {
   } as unknown as QuoteDetail
 
   it('keeps the lines in their groups and in position order', () => {
-    const document = fromQuoteDetail(quote)
+    const document = fromQuoteDetail(quote, company)
 
     expect(document.groups.map((group) => group.name)).toEqual(['Estructura', 'Revestimiento'])
     // A group that comes back later keeps its lines together rather than
@@ -162,14 +207,14 @@ describe('the office adapter', () => {
   })
 
   it('takes the optional extras out of the groups', () => {
-    const document = fromQuoteDetail(quote)
+    const document = fromQuoteDetail(quote, company)
 
     expect(document.extras).toHaveLength(1)
     expect(document.groups.some((group) => group.name === 'Depuración')).toBe(false)
   })
 
   it('bands a draft and never carries the internal notes', () => {
-    const document = fromQuoteDetail(quote)
+    const document = fromQuoteDetail(quote, company)
 
     expect(document.draft).toBe(true)
     expect(JSON.stringify(document)).not.toContain('No sale de aquí')
@@ -181,6 +226,30 @@ describe('the office adapter', () => {
       items: [line({ id: 'd', quantity: 10, unitPrice: 100, discountPct: 10 })],
     } as unknown as QuoteDetail
 
-    expect(fromQuoteDetail(discounted).groups[0]!.items[0]!.lineTotal).toBe(900)
+    expect(fromQuoteDetail(discounted, company).groups[0]!.items[0]!.lineTotal).toBe(900)
+  })
+
+  it('hides the prices of a group the way the client is shown it', () => {
+    const presented = {
+      ...quote,
+      groups: [{ name: 'Estructura', position: 1, display: 'no_prices' }],
+    } as unknown as QuoteDetail
+
+    const estructura = fromQuoteDetail(presented, company).groups[0]!
+    expect(estructura.display).toBe('no_prices')
+    expect(estructura.subtotal).toBe(225)
+    expect(estructura.items.every((item) => item.unitPrice === null && item.lineTotal === null)).toBe(true)
+  })
+
+  it('signs only an accepted quote', () => {
+    const signedButReopened = { ...quote, status: 'sent', signedName: 'Marta Soler' } as unknown as QuoteDetail
+    expect(fromQuoteDetail(signedButReopened, company).signature).toBeNull()
+
+    const accepted = { ...quote, status: 'accepted', signedName: 'Marta Soler', signedAt: '2026-09-22T10:00:00Z' } as unknown as QuoteDetail
+    expect(fromQuoteDetail(accepted, company).signature).toEqual({
+      name: 'Marta Soler',
+      at: '2026-09-22T10:00:00Z',
+      image: null,
+    })
   })
 })

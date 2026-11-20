@@ -6,9 +6,24 @@ const base = {
   title: 'Piscina 8x4 con gresite',
   clientName: 'Familia Soler',
   total: 12450.5,
+  vatRate: null,
   validUntil: '2026-10-21',
   url: 'https://piscinasreus.example/q/abc123',
-}
+  company: {
+    tradeName: 'Piscinas Reus',
+    tagline: 'Construcción y mantenimiento de piscinas',
+    legalName: null,
+    taxId: null,
+    address: null,
+    postalCode: null,
+    city: 'Reus',
+    province: 'Tarragona',
+    phone: null,
+    email: null,
+    website: null,
+    quoteFooter: null,
+  },
+} as const
 
 describe('the email that carries a quote', () => {
   it('names the quote in the subject, so a reply thread is about one document', () => {
@@ -48,5 +63,18 @@ describe('the email that carries a quote', () => {
 
     expect(email.html).toContain('Soler &amp; &lt;hijos&gt;')
     expect(email.html).not.toContain('<script>')
+  })
+
+  it('says whether VAT is in the total', () => {
+    expect(buildQuoteEmail(base).text).toContain('(IVA no incluido)')
+    const withVat = buildQuoteEmail({ ...base, vatRate: 21, total: 15065.11 })
+    expect(withVat.text).toContain('15.065,11')
+    expect(withVat.text).toContain('IVA 21\u00a0% incluido')
+  })
+
+  it('signs with the company name from the settings, escaped', () => {
+    const email = buildQuoteEmail({ ...base, company: { ...base.company, tradeName: 'Piscinas <Reus>' } })
+    expect(email.html).toContain('Piscinas &lt;Reus&gt;')
+    expect(email.text).toContain('Piscinas <Reus> · Reus')
   })
 })

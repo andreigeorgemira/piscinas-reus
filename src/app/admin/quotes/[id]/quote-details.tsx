@@ -7,6 +7,7 @@ import { idleState, type ActionState } from '@/app/admin/action-state'
 import { FIELD_CLASS, HEADER_BUTTON_CLASS } from '@/app/admin/price-book/ui'
 import { updateQuote } from '@/app/admin/quotes/actions'
 import { ClientPicker } from '@/app/admin/quotes/client-picker'
+import { VatField } from '@/app/admin/quotes/vat-field'
 import type { ClientOption } from '@/lib/clients/queries'
 import type { QuoteDetail } from '@/lib/quotes/queries'
 
@@ -155,10 +156,21 @@ export function QuoteDetailsButton({
                     type="date"
                     defaultValue={quote.validUntil ?? ''}
                     disabled={!editable}
+                    aria-invalid={fields.validUntil ? true : undefined}
                     className={`${FIELD_CLASS} num h-9`}
                   />
+                  {fields.validUntil ? (
+                    <p className="text-2xs text-danger">{fields.validUntil}</p>
+                  ) : null}
                 </div>
               </div>
+
+              <VatField
+                defaultRate={quote.vatRate}
+                disabled={!editable}
+                error={fields.vatRate}
+                label="IVA de este presupuesto"
+              />
 
               <div className="flex flex-col gap-1.5">
                 <label htmlFor={clientNotesId} className={LABEL_CLASS}>
@@ -192,7 +204,7 @@ export function QuoteDetailsButton({
                 />
               </div>
 
-              {state.error ? (
+              {state.error && Object.keys(fields).length === 0 ? (
                 <p role="alert" className="text-xs text-danger">
                   {state.error}
                 </p>

@@ -552,10 +552,10 @@ test('imports a CSV that creates its own group and price', async ({ page }) => {
 
   await expect(page.getByRole('cell', { name: itemName, exact: true })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Importar 1 conceptos', exact: true }).click()
+  await page.getByRole('button', { name: 'Importar 1 concepto', exact: true }).click()
   await expect(
     page.getByText(
-      'Importación completada: 1 grupos nuevos, 1 conceptos nuevos sin código, 0 conceptos con código creados o actualizados.',
+      'Importación completada: 1 grupo nuevo, 1 concepto nuevo sin código, 0 conceptos con código creados o actualizados.',
     ),
   ).toBeVisible()
 
@@ -715,7 +715,7 @@ test('commits what the preview showed, not what the textarea holds when Importar
   // written.
   await textarea.fill(editedCsv)
 
-  await page.getByRole('button', { name: 'Importar 1 conceptos', exact: true }).click()
+  await page.getByRole('button', { name: 'Importar 1 concepto', exact: true }).click()
   await expect(page.getByText(/Importación completada/)).toBeVisible()
 
   const admin = adminDb()

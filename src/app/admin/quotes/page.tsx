@@ -6,6 +6,7 @@ import { PAGE_SIZES, Paginator } from '@/components/ui/paginator'
 import { DataTable, TableEmpty, type TableColumn } from '@/components/ui/table'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { listClientOptions } from '@/lib/clients/queries'
+import { getCompanySettings } from '@/lib/settings/queries'
 import { listQuotes } from '@/lib/quotes/queries'
 import { QUOTE_STATUS_LABELS, QUOTE_STATUSES, type QuoteStatus } from '@/lib/quotes/status'
 import { NewQuoteButton } from './new-quote-dialog'
@@ -20,7 +21,7 @@ const COLUMNS: TableColumn[] = [
   { key: 'lines', label: 'Líneas', width: 'w-20', align: 'right' },
   { key: 'created', label: 'Creado', width: 'w-28' },
   { key: 'valid', label: 'Válido hasta', width: 'w-32' },
-  { key: 'total', label: 'Total', width: 'w-32', align: 'right' },
+  { key: 'total', label: 'Total sin IVA', width: 'w-32', align: 'right' },
   { key: 'margin', label: 'Margen', width: 'w-28', align: 'right' },
   { key: 'actions', label: 'Acciones', width: 'w-24', srOnly: true },
 ]
@@ -68,7 +69,7 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
 
   const supabase = await requireAdmin()
 
-  const [listing, clients] = await Promise.all([
+  const [listing, clients, settings] = await Promise.all([
     listQuotes(supabase, {
       search: query.q,
       status: query.status === '' ? null : (query.status as QuoteStatus),
@@ -77,6 +78,7 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
       pageSize: query.size,
     }),
     listClientOptions(supabase),
+    getCompanySettings(supabase),
   ])
 
   const filterCount = (query.status ? 1 : 0) + (query.client ? 1 : 0)
@@ -165,7 +167,7 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
                 </div>
               }
             >
-              <NewQuoteButton clients={clients} />
+              <NewQuoteButton clients={clients} defaultVatRate={settings.defaultVatRate} />
             </ActionBar>
           }
           empty={

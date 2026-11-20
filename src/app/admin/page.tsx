@@ -21,6 +21,11 @@ const SHORTCUTS = [
     title: 'Tarifarios',
     description: 'Los catálogos de precios: grupos, conceptos, coste y precio.',
   },
+  {
+    href: '/admin/settings',
+    title: 'Ajustes',
+    description: 'Datos fiscales de la empresa, IVA por defecto y pie de los presupuestos.',
+  },
 ]
 
 /**

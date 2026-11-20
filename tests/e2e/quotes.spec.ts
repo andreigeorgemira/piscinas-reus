@@ -197,7 +197,7 @@ test('builds a quote by ticking the catalogue, sends it, accepts it and reopens 
   await page.keyboard.press('Tab')
   await expect(line).toContainText('250,00')
 
-  const totals = page.getByRole('contentinfo')
+  const totals = page.getByRole('region', { name: 'Totales del presupuesto' })
   await expect(totals).toContainText('250,00')
   // Cost came from the catalogue too (10 €), so the margin is the other half.
   await expect(totals).toContainText('125,00')
@@ -324,12 +324,12 @@ test('keeps what was typed when the form is refused, and creates the client from
   // A title of spaces passes the browser's own `required` and is refused by the
   // schema, which is the path that used to hand back an empty dialog.
   await page.getByLabel('Título *').fill('   ')
-  await page.getByLabel('Válido hasta').fill('2026-10-21')
+  await page.getByLabel('Válido hasta').fill('2099-10-21')
   await page.getByRole('button', { name: 'Crear y abrir' }).click()
 
   await expect(page.getByText('El título es obligatorio.')).toBeVisible()
   // The point of the whole change: the date is still there.
-  await expect(page.getByLabel('Válido hasta')).toHaveValue('2026-10-21')
+  await expect(page.getByLabel('Válido hasta')).toHaveValue('2099-10-21')
 
   // The client is optional, and the way to have one without leaving this dialog
   // is to type the name and create it on top.
@@ -383,11 +383,11 @@ test('writes a quote with no client, and refuses to accept it until it has one',
   await expect(row).toContainText('Enviado')
 
   // Accepting is where it would become a project, and a project belongs to
-  // somebody: the database refuses it and the screen says what to do.
+  // somebody: the move is not offered, and the menu says what to do instead.
   await row.getByRole('button', { name: `Cambiar el estado de ${reference}` }).click()
-  await page.getByRole('button', { name: 'Marcar como aceptado' }).click()
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Marcar como aceptado' }).click()
-  await dismissToast(page, 'Asigna un cliente')
+  await expect(page.getByRole('button', { name: 'Marcar como aceptado' })).toHaveCount(0)
+  await expect(page.getByText('asígnale antes un cliente')).toBeVisible()
+  await page.keyboard.press('Escape')
 
   await expect(row).toContainText('Enviado')
 })

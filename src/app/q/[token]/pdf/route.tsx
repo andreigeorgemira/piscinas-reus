@@ -28,7 +28,17 @@ export async function GET(_request: Request, { params }: RouteContext<'/q/[token
     return new Response('No encontrado', { status: 404 })
   }
 
-  const body = await renderToBuffer(<QuoteDocument quote={fromPublicQuote(quote)} />)
+  // The client's own copy of what they signed carries their drawing. Asked for
+  // only once there is one: quote_signature_by_token answers for an accepted
+  // quote and nothing else (0019).
+  let signatureImage: string | null = null
+  if (quote.status === 'accepted') {
+    const { data, error } = await supabase.rpc('quote_signature_by_token', { p_token: token })
+    if (error) throw error
+    signatureImage = typeof data === 'string' ? data : null
+  }
+
+  const body = await renderToBuffer(<QuoteDocument quote={fromPublicQuote(quote, signatureImage)} />)
 
   return new Response(body as unknown as BodyInit, {
     headers: {

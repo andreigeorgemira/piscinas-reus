@@ -78,7 +78,12 @@ export function QuoteStatusControl({ quote }: { quote: QuoteRowSummary }) {
     })
   }
 
-  const moves = movesFrom(quote.status)
+  // Accepting is where a quote becomes a project, and a project is somebody's
+  // (0014): with no client the move is not offered at all rather than offered
+  // and refused. The popover says why it is missing.
+  const needsClient = quote.clientName === null
+  const moves = movesFrom(quote.status).filter((status) => status !== 'accepted' || !needsClient)
+  const acceptHidden = needsClient && movesFrom(quote.status).includes('accepted')
 
   return (
     <>
@@ -122,6 +127,11 @@ export function QuoteStatusControl({ quote }: { quote: QuoteRowSummary }) {
                 {QUOTE_MOVE_LABELS[status]}
               </button>
             ))}
+            {acceptHidden ? (
+              <p className="px-2 py-1.5 text-2xs text-faint">
+                Para marcarlo como aceptado, asígnale antes un cliente en «Datos».
+              </p>
+            ) : null}
           </PopoverContent>
         </Popover>
       </div>
@@ -131,10 +141,9 @@ export function QuoteStatusControl({ quote }: { quote: QuoteRowSummary }) {
         onOpenChange={(value) => setConfirming(value ? 'accepted' : null)}
         tone="normal"
         title={`Marcar ${quote.reference} como aceptado`}
-        description={`${quote.clientName ?? 'Sin cliente'} acepta ${formatEuros(quote.grandTotal)}.`}
+        description={`${quote.clientName ?? ''} acepta ${formatEuros(quote.grandTotal)} (sin IVA).`}
         risks={[
           'Se crea el proyecto con su propia referencia (P-año-nnnn), a nombre de este cliente.',
-          'Sin cliente asignado no se puede aceptar: el proyecto es de alguien.',
         ]}
         confirmLabel="Marcar como aceptado"
         onConfirm={() => move('accepted')}

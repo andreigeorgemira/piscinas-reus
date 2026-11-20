@@ -1,5 +1,7 @@
 import { formatEuros } from '@/lib/price-book/decimal'
 import { formatSpanishDate } from '@/lib/quotes/public'
+import type { Letterhead } from '@/lib/settings/letterhead'
+import { formatVatRate } from '@/lib/vat'
 
 /**
  * The email that carries a quote to a client.
@@ -18,8 +20,13 @@ export type QuoteEmailInput = {
   reference: string
   title: string
   clientName: string
+  /** What the client is asked to pay: with VAT when the quote carries it. */
   total: number
+  /** The quote's VAT rate. Null: the total carries no VAT and the email says so. */
+  vatRate: number | null
   validUntil: string | null
+  /** Who the quote is from (company_settings). */
+  company: Letterhead
   /** Where the client signs. Built by publicQuoteUrl. */
   url: string
   /** A line or two the office adds from the send dialog. */
@@ -44,7 +51,11 @@ export function buildQuoteEmail(input: QuoteEmailInput): QuoteEmail {
 
   const greeting = `Hola ${input.clientName},`
   const opening = `aquí tienes el presupuesto ${input.reference} para ${input.title}.`
-  const amount = `Total: ${formatEuros(input.total)} (IVA no incluido).`
+  const vatNote =
+    input.vatRate === null ? 'IVA no incluido' : `IVA ${formatVatRate(input.vatRate)} incluido`
+  const amount = `Total: ${formatEuros(input.total)} (${vatNote}).`
+  const signature = [input.company.tradeName, input.company.city].filter(Boolean).join(' · ')
+  const tagline = input.company.tagline ?? ''
   const invitation =
     'Desde el enlace puedes verlo con detalle, marcar los extras que te interesen y firmarlo si te parece bien.'
   const message = input.message?.trim() ? input.message.trim() : null
@@ -62,7 +73,7 @@ export function buildQuoteEmail(input: QuoteEmailInput): QuoteEmail {
     '',
     input.url,
     '',
-    'Piscinas Reus · Reus, Tarragona',
+    signature,
   ]
     .filter((line) => line !== null && line !== '')
     .join('\n')
@@ -72,15 +83,15 @@ export function buildQuoteEmail(input: QuoteEmailInput): QuoteEmail {
 <body style="margin:0;padding:24px;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#16181d;">
   <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e3e6ea;border-radius:12px;">
     <tr><td style="padding:24px 24px 8px;">
-      <p style="margin:0;font-size:15px;font-weight:600;">Piscinas Reus</p>
-      <p style="margin:4px 0 0;font-size:12px;color:#6b7280;">Construcción y mantenimiento de piscinas</p>
+      <p style="margin:0;font-size:15px;font-weight:600;">${escapeHtml(input.company.tradeName)}</p>
+      ${tagline ? `<p style="margin:4px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(tagline)}</p>` : ''}
     </td></tr>
     <tr><td style="padding:8px 24px 0;">
       <p style="margin:16px 0 0;font-size:14px;">${escapeHtml(greeting)}</p>
       <p style="margin:8px 0 0;font-size:14px;line-height:22px;">${escapeHtml(opening)}</p>
       ${message ? `<p style="margin:12px 0 0;font-size:14px;line-height:22px;white-space:pre-line;">${escapeHtml(message)}</p>` : ''}
       <p style="margin:16px 0 0;font-size:18px;font-weight:600;">${escapeHtml(formatEuros(input.total))}</p>
-      <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">IVA no incluido. ${escapeHtml(validity)}</p>
+      <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(`${vatNote}.`)} ${escapeHtml(validity)}</p>
       <p style="margin:16px 0 0;font-size:14px;line-height:22px;">${escapeHtml(invitation)}</p>
     </td></tr>
     <tr><td style="padding:20px 24px 24px;">
@@ -88,7 +99,7 @@ export function buildQuoteEmail(input: QuoteEmailInput): QuoteEmail {
       <p style="margin:12px 0 0;font-size:11px;color:#9aa1ab;word-break:break-all;">${escapeHtml(input.url)}</p>
     </td></tr>
   </table>
-  <p style="max-width:520px;margin:12px auto 0;font-size:11px;color:#9aa1ab;text-align:center;">Piscinas Reus · Reus, Tarragona</p>
+  <p style="max-width:520px;margin:12px auto 0;font-size:11px;color:#9aa1ab;text-align:center;">${escapeHtml(signature)}</p>
 </body>
 </html>`
 

@@ -12,15 +12,20 @@ import { publicQuoteUrl } from '@/lib/quotes/public'
 import {
   fieldIssues,
   firstIssue,
+  isPastDate,
   quoteInputFromForm,
   quoteInputSchema,
   quoteInputToRow,
+  todayInSpain,
 } from '@/lib/quotes/schema'
+import { getCompanySettings } from '@/lib/settings/queries'
 import { isEditable, QUOTE_STATUSES, type QuoteStatus } from '@/lib/quotes/status'
 
 export type { ActionState }
 
 const INVALID_ID = 'El presupuesto no es válido.'
+
+const PAST_VALIDITY = 'La validez ya ha pasado. Pon una fecha a partir de hoy, o déjala en blanco.'
 
 /**
  * A database refusal, in words a staff member can act on.
@@ -74,10 +79,20 @@ export async function createQuote(
     // printing one sentence over six inputs and clearing them all.
     return { error: firstIssue(parsed.error), fields: fieldIssues(parsed.error) }
   }
+  if (isPastDate(parsed.data.validUntil, todayInSpain())) {
+    return { error: PAST_VALIDITY, fields: { validUntil: PAST_VALIDITY } }
+  }
+
+  // A form with no VAT box at all (a POST from anywhere but the dialog) gets
+  // the company's default, the same rate the dialog would have offered.
+  const row = quoteInputToRow(parsed.data)
+  if (!formData.has('vat_rate')) {
+    row.vat_rate = (await getCompanySettings(supabase)).defaultVatRate
+  }
 
   const { data, error } = await supabase
     .from('quotes')
-    .insert(quoteInputToRow(parsed.data))
+    .insert(row)
     .select('id')
     .single()
 
@@ -123,6 +138,9 @@ export async function updateQuote(
   const parsed = quoteInputSchema.safeParse(quoteInputFromForm(formData))
   if (!parsed.success) {
     return { error: firstIssue(parsed.error), fields: fieldIssues(parsed.error) }
+  }
+  if (isPastDate(parsed.data.validUntil, todayInSpain())) {
+    return { error: PAST_VALIDITY, fields: { validUntil: PAST_VALIDITY } }
   }
 
   const { data: current, error: readError } = await supabase
@@ -275,11 +293,20 @@ export async function sendQuoteToClient(
    * (the same reason readTotals exists in src/lib/quotes/queries.ts). Asking for
    * it as an embed answers PGRST200 and no total at all.
    */
-  const { data: totals } = await supabase
-    .from('quote_totals')
-    .select('grand_total')
-    .eq('quote_id', id)
-    .maybeSingle()
+  const [{ data: totals, error: totalsError }, company] = await Promise.all([
+    supabase
+      .from('quote_totals')
+      .select('grand_total, vat_rate, total_with_vat')
+      .eq('quote_id', id)
+      .maybeSingle(),
+    getCompanySettings(supabase),
+  ])
+  // An email with a total of zero is worse than no email: say so instead.
+  if (totalsError || !totals) {
+    console.error('could not read the quote total for the email', totalsError)
+    return { error: 'No se pudo leer el total del presupuesto. Inténtalo de nuevo.' }
+  }
+  const vatRate = totals.vat_rate === null ? null : Number(totals.vat_rate)
 
   if (!quote.clients?.email) {
     return {
@@ -307,7 +334,9 @@ export async function sendQuoteToClient(
     reference: quote.reference,
     title: quote.title,
     clientName: quote.clients.full_name,
-    total: totals?.grand_total ?? 0,
+    total: vatRate === null ? Number(totals.grand_total) : Number(totals.total_with_vat),
+    vatRate,
+    company,
     validUntil: quote.valid_until,
     url: publicQuoteUrl(quote.access_token),
     message: typeof rawMessage === 'string' ? rawMessage.slice(0, 2000) : null,
@@ -363,7 +392,7 @@ export async function duplicateQuote(
   const { data: original, error: readError } = await supabase
     .from('quotes')
     .select(
-      'client_id, title, start_date_planned, valid_until, client_notes, internal_notes, quote_items(price_book_item_id, group_name, name, description, unit, quantity, unit_cost, unit_price, discount_pct, is_recommended, position)',
+      'client_id, title, start_date_planned, valid_until, client_notes, internal_notes, vat_rate, quote_items(price_book_item_id, group_name, name, description, unit, quantity, unit_cost, unit_price, discount_pct, is_recommended, position), quote_groups(name, position, display)',
     )
     .eq('id', id)
     .maybeSingle()
@@ -382,7 +411,9 @@ export async function duplicateQuote(
     valid_until: string | null
     client_notes: string | null
     internal_notes: string | null
+    vat_rate: number | null
     quote_items: Record<string, unknown>[]
+    quote_groups: { name: string; position: number; display: string }[]
   }
 
   const { data: copy, error } = await supabase
@@ -396,6 +427,7 @@ export async function duplicateQuote(
       valid_until: source.valid_until,
       client_notes: source.client_notes,
       internal_notes: source.internal_notes,
+      vat_rate: source.vat_rate,
     })
     .select('id, reference')
     .single()
@@ -416,6 +448,21 @@ export async function duplicateQuote(
       revalidatePath('/admin/quotes')
       return {
         error: `Se creó ${copy!.reference} pero sus líneas no se copiaron. Ábrelo y revísalo.`,
+      }
+    }
+  }
+
+  // How the original was presented comes with it: the copy is the same
+  // document, and the groups staff hid prices on stay hidden.
+  if (source.quote_groups.length > 0) {
+    const { error: groupsError } = await supabase
+      .from('quote_groups')
+      .insert(source.quote_groups.map((group) => ({ ...group, quote_id: copy!.id })))
+    if (groupsError) {
+      console.error('could not copy the quote presentation', groupsError)
+      revalidatePath('/admin/quotes')
+      return {
+        error: `Se creó ${copy!.reference} con sus líneas, pero no con la presentación de sus grupos. Revísala antes de enviarlo.`,
       }
     }
   }

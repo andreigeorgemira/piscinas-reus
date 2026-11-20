@@ -31,6 +31,7 @@ function line(overrides: Partial<QuoteItem> = {}): QuoteItem {
   return {
     id: `l-${clock}`,
     priceBookItemId: null,
+    priceBookCode: null,
     groupName: null,
     name: 'Línea',
     description: null,

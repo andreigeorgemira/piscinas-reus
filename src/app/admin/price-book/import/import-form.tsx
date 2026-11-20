@@ -8,6 +8,7 @@ import { UNIT_LABELS } from '@/lib/price-book/schema'
 import { PRIMARY_BUTTON_CLASS } from '../ui'
 import { commitImport, previewImport } from './actions'
 import { idleImportState, type ImportState } from './import-state'
+import { plural } from '@/lib/plural'
 
 const TEXTAREA_CLASS =
   'rounded-[5px] border border-line bg-surface px-2 py-1.5 text-[13px] text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent'
@@ -159,7 +160,7 @@ export function ImportForm({ priceBookId }: { priceBookId: string }) {
             <input type="hidden" name="price_book_id" value={priceBookId} />
             <input type="hidden" name="text" value={state.text} />
             <button type="submit" disabled={pending} className={PRIMARY_BUTTON_CLASS}>
-              {pending ? 'Importando…' : `Importar ${state.rows.length} conceptos`}
+              {pending ? 'Importando…' : `Importar ${plural(state.rows.length, 'concepto', 'conceptos')}`}
             </button>
           </form>
         </div>
@@ -174,9 +175,7 @@ export function ImportForm({ priceBookId }: { priceBookId: string }) {
             precise update count.
           */}
           <p className="text-[13px]">
-            Importación completada: {state.groupsCreated} grupos nuevos, {state.created}{' '}
-            conceptos nuevos sin código, {state.updated} conceptos con código creados o
-            actualizados.
+            {`Importación completada: ${plural(state.groupsCreated, 'grupo nuevo', 'grupos nuevos')}, ${plural(state.created, 'concepto nuevo sin código', 'conceptos nuevos sin código')}, ${plural(state.updated, 'concepto con código creado o actualizado', 'conceptos con código creados o actualizados')}.`}
           </p>
           <Link
             href={`/admin/price-books/${priceBookId}`}

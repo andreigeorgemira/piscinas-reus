@@ -9,10 +9,15 @@ import { getBookCatalogue, listPriceBooks } from '@/lib/price-book/queries'
 import { buildBoard } from '@/lib/quotes/board'
 import { publicQuoteUrl } from '@/lib/quotes/public'
 import { getQuote } from '@/lib/quotes/queries'
-import { isEditable } from '@/lib/quotes/status'
+import { roundMoney } from '@/lib/money'
+import { plural } from '@/lib/plural'
+import { documentSections, presentationOrder } from '@/lib/quotes/presentation'
+import { frozenReason, isEditable } from '@/lib/quotes/status'
+import { lineTotal } from '@/lib/quotes/totals'
 import { BookSelect } from '@/app/admin/quotes/book-select'
 import { QuoteMenu, SendQuoteButton } from '@/app/admin/quotes/quote-menu'
 import { GroupCard } from './group-card'
+import { PresentationBoard, type PresentationSection } from './presentation-board'
 import { QuoteDetailsButton } from './quote-details'
 import { QuoteTotalsBar } from './quote-totals'
 import { SaveNowButton } from './save-now'
@@ -76,6 +81,8 @@ export default async function QuoteEditorPage({
     book: book?.id ?? '',
     q: firstValue(search.q).trim(),
     chosen: firstValue(search.chosen) === '1',
+    // The third way of looking at a quote: as the client will read it.
+    presentation: firstValue(search.view) === 'presentation',
   }
 
   const base = `/admin/quotes/${id}`
@@ -89,6 +96,7 @@ export default async function QuoteEditorPage({
     if (next.book && next.book !== books[0]?.id) params.set('book', next.book)
     if (next.q) params.set('q', next.q)
     if (next.chosen) params.set('chosen', '1')
+    if (next.presentation) params.set('view', 'presentation')
     const queryString = params.toString()
     return queryString ? `${base}?${queryString}` : base
   }
@@ -113,6 +121,31 @@ export default async function QuoteEditorPage({
   })
 
   const filtering = query.q !== '' || query.chosen
+
+  // The document's groups, in the order positions give them (the editor keeps
+  // positions in presentation order). Built only when that view is open.
+  const presentationSections: PresentationSection[] = query.presentation
+    ? documentSections(
+        presentationOrder(
+          [...quote.items].sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt)),
+          quote.groups,
+        ),
+        quote.groups,
+      ).map((section) => ({
+        groupName: section.groupName,
+        display: section.display,
+        subtotal: roundMoney(section.lines.reduce((sum, line) => sum + lineTotal(line), 0)),
+        lines: section.lines.map((line) => ({
+          id: line.id,
+          name: line.name,
+          quantity: line.quantity,
+          unit: line.unit,
+          unitPrice: line.unitPrice,
+          discountPct: line.discountPct,
+          lineTotal: lineTotal(line),
+        })),
+      }))
+    : []
 
   return (
     <>
@@ -169,7 +202,7 @@ export default async function QuoteEditorPage({
 
         {/* A GET form, so the filter is in the address: linkable, and working
             before any JavaScript has loaded. */}
-        <form action={base} className="flex items-center gap-2">
+        <form action={base} className={`flex items-center gap-2 ${query.presentation ? 'hidden' : ''}`}>
           {query.book && query.book !== books[0]?.id ? (
             <input type="hidden" name="book" value={query.book} />
           ) : null}
@@ -204,31 +237,27 @@ export default async function QuoteEditorPage({
         </form>
 
         <div className="flex overflow-hidden rounded-lg border border-line">
-          <Link
-            href={href({ chosen: false })}
-            aria-current={query.chosen ? undefined : 'true'}
-            className={`flex h-9 items-center px-3 text-xs transition-colors ${
-              query.chosen
-                ? 'bg-surface text-muted hover:bg-surface-hover'
-                : 'bg-ink font-medium text-canvas'
-            }`}
-          >
-            Todo el tarifario
-          </Link>
-          <Link
-            href={href({ chosen: true })}
-            aria-current={query.chosen ? 'true' : undefined}
-            className={`flex h-9 items-center px-3 text-xs transition-colors ${
-              query.chosen
-                ? 'bg-ink font-medium text-canvas'
-                : 'bg-surface text-muted hover:bg-surface-hover'
-            }`}
-          >
-            Solo el presupuesto
-          </Link>
+          {(
+            [
+              { label: 'Todo el tarifario', to: { chosen: false, presentation: false }, on: !query.chosen && !query.presentation },
+              { label: 'Solo el presupuesto', to: { chosen: true, presentation: false }, on: query.chosen && !query.presentation },
+              { label: 'Presentación', to: { chosen: false, presentation: true }, on: query.presentation },
+            ] as const
+          ).map((tab) => (
+            <Link
+              key={tab.label}
+              href={href(tab.to)}
+              aria-current={tab.on ? 'true' : undefined}
+              className={`flex h-9 items-center px-3 text-xs transition-colors ${
+                tab.on ? 'bg-ink font-medium text-canvas' : 'bg-surface text-muted hover:bg-surface-hover'
+              }`}
+            >
+              {tab.label}
+            </Link>
+          ))}
         </div>
 
-        {books.length > 1 ? (
+        {books.length > 1 && !query.presentation ? (
           <BookSelect
             books={books.map((candidate) => ({
               id: candidate.id,
@@ -241,7 +270,8 @@ export default async function QuoteEditorPage({
 
         <span className="ml-auto" />
 
-        <SaveNowButton />
+        {/* Nothing to save on a quote whose lines are frozen. */}
+        {editable ? <SaveNowButton /> : null}
 
         <SendQuoteButton
           quote={sendable}
@@ -267,6 +297,16 @@ export default async function QuoteEditorPage({
         quote itself, not only as a status in a list. A signature is the end of
         this document's life and deserves more than a badge.
       */}
+      {/*
+        Why the inputs below are greyed out, said once, where the eye goes first.
+        Without it a sent quote looked like a broken editor.
+      */}
+      {!editable ? (
+        <p className="border-b border-line bg-surface-sunk px-6 py-2 text-xs text-muted">
+          {frozenReason(quote.status)}
+        </p>
+      ) : null}
+
       {quote.status === 'accepted' ? (
         <p className="flex flex-wrap items-center gap-2 border-b border-success/30 bg-success-soft px-6 py-2 text-xs text-success">
           <svg
@@ -315,7 +355,14 @@ export default async function QuoteEditorPage({
           </p>
         ) : null}
 
-        {board.sections.length === 0 ? (
+        {query.presentation ? (
+          <PresentationBoard
+            quoteId={quote.id}
+            sections={presentationSections}
+            extrasCount={quote.items.filter((item) => item.isRecommended).length}
+            editable={editable}
+          />
+        ) : board.sections.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-lg border border-line bg-surface px-5 py-16 text-center">
             <span className="text-faint">
               <svg
@@ -374,7 +421,15 @@ export default async function QuoteEditorPage({
 
       <QuoteTotalsBar
         totals={quote.totals}
-        summary={`${board.lineCount} ${board.lineCount === 1 ? 'línea' : 'líneas'} en ${board.sectionsWithLines} ${board.sectionsWithLines === 1 ? 'grupo' : 'grupos'}`}
+        summary={
+          query.presentation
+            ? `${plural(
+                presentationSections.reduce((sum, section) => sum + section.lines.length, 0),
+                'línea',
+                'líneas',
+              )} en ${plural(presentationSections.length, 'grupo', 'grupos')}`
+            : `${plural(board.lineCount, 'línea', 'líneas')} en ${plural(board.sectionsWithLines, 'grupo', 'grupos')}`
+        }
       />
     </>
   )

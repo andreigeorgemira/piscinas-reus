@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { parseDecimal } from '@/lib/price-book/decimal'
 import { fieldIssues, firstIssue, moneyField, UNIT_TYPES } from '@/lib/price-book/schema'
+import { vatRateField } from '@/lib/vat'
 import { hasMoreThanThreeDecimals } from './quantity'
 
 export { fieldIssues, firstIssue }
@@ -137,6 +138,9 @@ export const quoteInputSchema = z.object({
   // Never leaves the admin zone (spec, section 7). The column is admin-only
   // and the client-facing view omits it (0004_client_views.sql).
   internalNotes: optionalText(4000, 'Las notas internas no pueden superar los 4000 caracteres.'),
+  // The quote's own VAT rate, null for none (0019). Defaults to the company's
+  // when the quote is created; see createQuote.
+  vatRate: vatRateField,
 })
 
 export type QuoteInput = z.infer<typeof quoteInputSchema>
@@ -172,6 +176,7 @@ export function quoteInputFromForm(formData: FormData): unknown {
     validUntil: formData.get('valid_until'),
     clientNotes: formData.get('client_notes'),
     internalNotes: formData.get('internal_notes'),
+    vatRate: formData.get('vat_rate'),
   }
 }
 
@@ -198,6 +203,7 @@ export function quoteInputToRow(input: QuoteInput) {
     valid_until: input.validUntil,
     client_notes: input.clientNotes,
     internal_notes: input.internalNotes,
+    vat_rate: input.vatRate,
   }
 }
 
@@ -212,4 +218,20 @@ export function quoteItemInputToRow(input: QuoteItemInput) {
     discount_pct: input.discountPct,
     is_recommended: input.isRecommended,
   }
+}
+
+/**
+ * Whether a validity date has already gone by, in Spain's calendar.
+ *
+ * `today` is passed in so the rule can be tested; the actions give it
+ * todayInSpain(). A quote that is valid until yesterday is born expired, and
+ * the client's page would open on a warning about it.
+ */
+export function isPastDate(date: string | null, today: string): boolean {
+  return date !== null && date < today
+}
+
+/** Today as YYYY-MM-DD in Madrid, wherever the server runs. */
+export function todayInSpain(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(now)
 }

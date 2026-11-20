@@ -2,6 +2,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { fromQuoteDetail, QuoteDocument } from '@/lib/quotes/pdf'
 import { getQuote } from '@/lib/quotes/queries'
+import { getCompanySettings } from '@/lib/settings/queries'
 
 /**
  * The office's PDF of any quote, draft included.
@@ -29,19 +30,18 @@ export async function GET(
     return new Response('No encontrado', { status: 404 })
   }
 
-  const { data: signature } = await supabase
-    .from('quotes')
-    .select('signed_name, signed_at, signature_image')
-    .eq('id', id)
-    .maybeSingle()
+  // The drawing is read on its own: it can weigh 300 kB, and nothing else on
+  // the editor needs it. The document decides whether to print it (accepted
+  // quotes only).
+  const [{ data: signature, error: signatureError }, company] = await Promise.all([
+    supabase.from('quotes').select('signature_image').eq('id', id).maybeSingle(),
+    getCompanySettings(supabase),
+  ])
+  if (signatureError) throw signatureError
 
   const body = await renderToBuffer(
     <QuoteDocument
-      quote={fromQuoteDetail(quote, {
-        name: signature?.signed_name ?? null,
-        at: signature?.signed_at ?? null,
-        image: signature?.signature_image ?? null,
-      })}
+      quote={fromQuoteDetail(quote, company, signature?.signature_image ?? null)}
     />,
   )
 

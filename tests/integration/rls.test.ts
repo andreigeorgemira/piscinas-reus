@@ -118,8 +118,14 @@ describe('clients table', () => {
     expect(error?.code).toBe('42501')
   })
 
+  it('hides another client\'s record from a client', async () => {
+    const { data } = await clientA.from('clients').select('id').eq('id', clientBId)
+    expect(data).toEqual([])
+  })
+
   it('refuses a client trying to rewrite their own email', async () => {
-    const { error } = await clientA
+    // Refused by RLS as "no row matched": no error, and nothing changed.
+    await clientA
       .from('clients')
       .update({ email: 'hijack@example.test' })
       .eq('id', clientAId)

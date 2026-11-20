@@ -292,7 +292,9 @@ function ClientForm({
         The one-line summary stays, under the per-field marks: a database refusal
         (a duplicate email) belongs to the form, not to a box.
       */}
-      {state.error ? (
+      {/* Only when no box carries it already: a postal code said wrong twice,
+          once under the box and once here, reads as two problems. */}
+      {state.error && Object.keys(fields).length === 0 ? (
         <p role="alert" className="text-xs text-danger">
           {state.error}
         </p>

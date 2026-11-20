@@ -3,9 +3,9 @@
 import { useOptimistic, useTransition } from 'react'
 import { toast } from 'sonner'
 import { idleState } from '@/app/admin/action-state'
-import { formatEuros } from '@/lib/price-book/decimal'
+import { formatEuros, formatPercent } from '@/lib/price-book/decimal'
 import { formatQuantity } from '@/lib/quotes/quantity'
-import type { PublicQuoteItem } from '@/lib/quotes/public'
+import type { PublicQuoteExtra } from '@/lib/quotes/public'
 import { UNIT_LABELS } from '@/lib/price-book/schema'
 import { toggleExtra } from './actions'
 
@@ -27,7 +27,7 @@ export function Extras({
   editable,
 }: {
   token: string
-  extras: PublicQuoteItem[]
+  extras: PublicQuoteExtra[]
   /** False once the quote has been answered: it is then a record, not a form. */
   editable: boolean
 }) {
@@ -36,7 +36,7 @@ export function Extras({
   )
   const [, startAction] = useTransition()
 
-  function toggle(item: PublicQuoteItem, selected: boolean) {
+  function toggle(item: PublicQuoteExtra, selected: boolean) {
     startAction(async () => {
       setChosen((current) => {
         const next = new Set(current)
@@ -94,6 +94,8 @@ export function Extras({
                   </span>
                   <span className="num block text-2xs text-muted">
                     {`${formatQuantity(extra.quantity)} ${UNIT_LABELS[extra.unit]} × ${formatEuros(extra.unitPrice)}`}
+                    {/* Without it, 4 × 175,25 € reads 630,90 € and the sum does not add up. */}
+                    {extra.discountPct ? ` − ${formatPercent(extra.discountPct)} dto.` : ''}
                     {extra.groupName ? ` · ${extra.groupName}` : ''}
                   </span>
                 </span>

@@ -7,6 +7,7 @@ import { HEADER_PRIMARY_BUTTON_CLASS } from '@/app/admin/price-book/ui'
 import type { ClientOption } from '@/lib/clients/queries'
 import { createQuote } from './actions'
 import { ClientPicker, type PickedClient } from './client-picker'
+import { VatField } from './vat-field'
 
 const FIELD_CLASS =
   'h-9 rounded-md border bg-surface px-2.5 text-sm text-ink placeholder:text-faint focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent'
@@ -33,9 +34,12 @@ export function NewQuoteDialog({
   onOpenChange,
   clients,
   client,
+  defaultVatRate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** The company's VAT default (Ajustes), offered pre-selected. */
+  defaultVatRate: number | null
   /** Every client, for the picker. */
   clients?: ClientOption[]
   /** The client this quote is for, when the screen already knows. */
@@ -60,14 +64,22 @@ export function NewQuoteDialog({
             Radix unmounts closed content, so each opening starts blank without
             an effect clearing anything (which is a cascading render).
           */}
-          <QuoteForm clients={clients} client={client} />
+          <QuoteForm clients={clients} client={client} defaultVatRate={defaultVatRate} />
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   )
 }
 
-function QuoteForm({ clients, client }: { clients?: ClientOption[]; client?: PickedClient }) {
+function QuoteForm({
+  clients,
+  client,
+  defaultVatRate,
+}: {
+  clients?: ClientOption[]
+  client?: PickedClient
+  defaultVatRate: number | null
+}) {
   const titleId = useId()
   const startId = useId()
   const validId = useId()
@@ -148,6 +160,12 @@ function QuoteForm({ clients, client }: { clients?: ClientOption[]; client?: Pic
         </div>
       </div>
 
+      <VatField
+        defaultRate={defaultVatRate}
+        error={fields.vatRate}
+        hint="El de Ajustes. Escribe otro si esta obra lleva otro tipo; vacío, sin IVA."
+      />
+
       {/*
         The summary line, under the per-field marks: a refusal that belongs to no
         single box (a database error) still has to be said.
@@ -188,10 +206,12 @@ function QuoteForm({ clients, client }: { clients?: ClientOption[]; client?: Pic
 export function NewQuoteButton({
   clients,
   client,
+  defaultVatRate,
   label = 'Nuevo presupuesto',
 }: {
   clients?: ClientOption[]
   client?: PickedClient
+  defaultVatRate: number | null
   label?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -213,7 +233,13 @@ export function NewQuoteButton({
         </svg>
         {label}
       </button>
-      <NewQuoteDialog open={open} onOpenChange={setOpen} clients={clients} client={client} />
+      <NewQuoteDialog
+        open={open}
+        onOpenChange={setOpen}
+        clients={clients}
+        client={client}
+        defaultVatRate={defaultVatRate}
+      />
     </>
   )
 }

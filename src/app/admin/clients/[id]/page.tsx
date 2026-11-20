@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/app/admin/page-header'
 import { HEADER_BUTTON_CLASS } from '@/app/admin/price-book/ui'
+import { getCompanySettings } from '@/lib/settings/queries'
 import { NewQuoteButton } from '@/app/admin/quotes/new-quote-dialog'
 import { QuoteRow } from '@/app/admin/quotes/quote-row'
 import { DataTable, TableEmpty, type TableColumn } from '@/components/ui/table'
@@ -21,7 +22,7 @@ const COLUMNS: TableColumn[] = [
   { key: 'lines', label: 'Líneas', width: 'w-20', align: 'right' },
   { key: 'created', label: 'Creado', width: 'w-28' },
   { key: 'valid', label: 'Válido hasta', width: 'w-32' },
-  { key: 'total', label: 'Total', width: 'w-32', align: 'right' },
+  { key: 'total', label: 'Total sin IVA', width: 'w-32', align: 'right' },
   { key: 'margin', label: 'Margen', width: 'w-28', align: 'right' },
   { key: 'actions', label: 'Acciones', width: 'w-24', srOnly: true },
 ]
@@ -55,7 +56,10 @@ export default async function ClientPage({ params }: PageProps<'/admin/clients/[
     notFound()
   }
 
-  const listing = await listQuotes(supabase, { clientId: id, pageSize: SHOWN_QUOTES })
+  const [listing, settings] = await Promise.all([
+    listQuotes(supabase, { clientId: id, pageSize: SHOWN_QUOTES }),
+    getCompanySettings(supabase),
+  ])
 
   const created = new Date(client.createdAt).toLocaleDateString('es-ES')
 
@@ -96,7 +100,10 @@ export default async function ClientPage({ params }: PageProps<'/admin/clients/[
         >
           Editar
         </EditClientButton>
-        <NewQuoteButton client={{ id: client.id, fullName: client.fullName }} />
+        <NewQuoteButton
+          client={{ id: client.id, fullName: client.fullName }}
+          defaultVatRate={settings.defaultVatRate}
+        />
       </PageHeader>
 
       <div className="flex min-h-0 flex-1 gap-5 p-5">

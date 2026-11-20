@@ -1,6 +1,7 @@
 import { Tooltip } from '@/components/ui/tooltip'
 import { formatEuros } from '@/lib/price-book/decimal'
 import type { QuoteTotals as Totals } from '@/lib/quotes/queries'
+import { formatVatRate } from '@/lib/vat'
 
 /**
  * What the quote comes to, along the bottom of the editor.
@@ -22,7 +23,12 @@ import type { QuoteTotals as Totals } from '@/lib/quotes/queries'
  */
 export function QuoteTotalsBar({ totals, summary }: { totals: Totals; summary: string }) {
   return (
-    <footer className="flex h-16 shrink-0 items-center gap-6 border-t border-line bg-surface px-6">
+    // A named region rather than a <footer>: inside the admin's <main> a footer
+    // is not a landmark, and this bar is what staff (and the tests) look for.
+    <section
+      aria-label="Totales del presupuesto"
+      className="flex h-16 shrink-0 items-center gap-6 border-t border-line bg-surface px-6"
+    >
       {/* What the bar is counting, at the end the numbers leave free. */}
       <span className="num mr-auto text-xs text-muted">{summary}</span>
 
@@ -60,13 +66,22 @@ export function QuoteTotalsBar({ totals, summary }: { totals: Totals; summary: s
         </Tooltip>
       </div>
 
+      {totals.vatRate !== null ? (
+        <Figure label={`IVA ${formatVatRate(totals.vatRate)}`} value={formatEuros(totals.vatTotal)} tone="muted" />
+      ) : null}
+
       <div className="flex h-11 items-center gap-3 rounded-lg border border-line bg-surface-sunk px-4">
-        <span className="text-xs font-medium text-ink-soft">Total</span>
+        <span className="flex flex-col text-xs font-medium text-ink-soft">
+          Total
+          <span className="text-[10px] font-normal text-faint">
+            {totals.vatRate === null ? 'sin IVA' : 'con IVA'}
+          </span>
+        </span>
         <span className="num text-xl font-semibold -tracking-[0.02em]">
-          {formatEuros(totals.grandTotal)}
+          {formatEuros(totals.vatRate === null ? totals.grandTotal : totals.totalWithVat)}
         </span>
       </div>
-    </footer>
+    </section>
   )
 }
 

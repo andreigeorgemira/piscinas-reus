@@ -123,13 +123,17 @@ export function QuoteMenu({
             </button>
           ) : null}
 
-          <button type="button" onClick={copyLink} className={ITEM_CLASS}>
-            <svg {...ICON_PROPS}>
-              <path d="M6.6 9.4a2.4 2.4 0 0 0 3.4 0l2.2-2.2a2.4 2.4 0 1 0-3.4-3.4l-.6.6" />
-              <path d="M9.4 6.6a2.4 2.4 0 0 0-3.4 0L3.8 8.8a2.4 2.4 0 1 0 3.4 3.4l.6-.6" />
-            </svg>
-            Copiar enlace del cliente
-          </button>
+          {/* A draft's link opens nothing until it is sent (quote_by_token
+              refuses drafts), so it is not offered for copying. */}
+          {quote.status !== 'draft' ? (
+            <button type="button" onClick={copyLink} className={ITEM_CLASS}>
+              <svg {...ICON_PROPS}>
+                <path d="M6.6 9.4a2.4 2.4 0 0 0 3.4 0l2.2-2.2a2.4 2.4 0 1 0-3.4-3.4l-.6.6" />
+                <path d="M9.4 6.6a2.4 2.4 0 0 0-3.4 0L3.8 8.8a2.4 2.4 0 1 0 3.4 3.4l.6-.6" />
+              </svg>
+              Copiar enlace del cliente
+            </button>
+          ) : null}
 
           {quote.status !== 'draft' ? (
             <a href={quote.publicUrl} target="_blank" rel="noreferrer" className={ITEM_CLASS}>
@@ -196,7 +200,9 @@ export function QuoteMenu({
         title={`Borrar ${quote.reference}`}
         description={`«${quote.title}»${quote.clientName ? `, de ${quote.clientName}` : ''}.`}
         risks={[
-          `Se borran sus ${quote.lineCount} ${quote.lineCount === 1 ? 'línea' : 'líneas'}. No se puede deshacer.`,
+          quote.lineCount === 1
+            ? 'Se borra su única línea. No se puede deshacer.'
+            : `Se borran sus ${quote.lineCount} líneas. No se puede deshacer.`,
           'El enlace del cliente deja de funcionar.',
           quote.projectReference
             ? `El proyecto ${quote.projectReference} NO se borra: queda sin presupuesto asociado.`

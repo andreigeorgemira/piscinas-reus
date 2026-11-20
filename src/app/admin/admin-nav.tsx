@@ -52,6 +52,16 @@ const ITEMS: NavItem[] = [
       </>
     ),
   },
+  {
+    href: '/admin/settings',
+    label: 'Ajustes',
+    icon: (
+      <>
+        <circle cx="8" cy="8" r="2.1" />
+        <path d="M8 1.9v1.6M8 12.5v1.6M14.1 8h-1.6M3.5 8H1.9M12.3 3.7l-1.1 1.1M4.8 11.2l-1.1 1.1M12.3 12.3l-1.1-1.1M4.8 4.8 3.7 3.7" />
+      </>
+    ),
+  },
 ]
 
 /**

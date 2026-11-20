@@ -20,7 +20,16 @@ import { acceptQuote, rejectQuote } from './actions'
  * on a phone in a garden. It is optional, it is cleared with one button, and it
  * travels as a PNG data URL in a hidden field.
  */
-export function QuoteResponse({ token, total }: { token: string; total: number }) {
+export function QuoteResponse({
+  token,
+  total,
+  vatIncluded,
+}: {
+  token: string
+  /** What the client commits to: the total with VAT when the quote carries it. */
+  total: number
+  vatIncluded: boolean
+}) {
   const nameId = useId()
   const reasonId = useId()
   const [rejecting, setRejecting] = useState(false)
@@ -97,7 +106,7 @@ export function QuoteResponse({ token, total }: { token: string; total: number }
     <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
       <h2 className="text-sm font-semibold">Firmar el presupuesto</h2>
       <p className="pt-1 text-xs text-muted">
-        {`Al firmar aceptas los ${formatEuros(total)} de arriba, con los extras que hayas marcado.`}
+        {`Al firmar aceptas los ${formatEuros(total)}${vatIncluded ? ' (IVA incluido)' : ''} de arriba, con los extras que hayas marcado.`}
       </p>
 
       <form action={acceptAction} className="flex flex-col gap-4 pt-4">

@@ -20,6 +20,7 @@ import {
   type ActiveFilter,
 } from '@/lib/price-book/queries'
 import { UNIT_LABELS, UNIT_TYPES, type UnitType } from '@/lib/price-book/schema'
+import { plural } from '@/lib/plural'
 
 export const metadata: Metadata = { title: 'Tarifario' }
 
@@ -196,7 +197,7 @@ export default async function PriceBookDetailPage({
         meta={
           filtering
             ? `${listing.itemsTotal} ${listing.itemsTotal === 1 ? 'resultado' : 'resultados'}`
-            : `${book.itemCount} conceptos · ${book.groupCount} grupos`
+            : `${plural(book.itemCount, 'concepto', 'conceptos')} · ${plural(book.groupCount, 'grupo', 'grupos')}`
         }
       >
         <Link
