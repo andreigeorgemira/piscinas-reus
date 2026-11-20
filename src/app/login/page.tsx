@@ -30,18 +30,17 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
           is in the form beside it. */}
       <section
         aria-hidden="true"
-        className="relative hidden overflow-hidden bg-shell lg:flex lg:flex-col lg:justify-between lg:p-12"
+        className="hidden bg-primary text-primary-ink lg:flex lg:flex-col lg:justify-between lg:p-12"
       >
-        <div className="brand-backdrop absolute inset-0" />
-        <div className="relative flex items-center gap-3">
-          <BrandMark name={name} size="lg" />
-          <span className="text-base font-semibold text-shell-ink">{name}</span>
+        <div className="flex items-center gap-3">
+          <BrandMark name={name} size="lg" inverse />
+          <span className="text-base font-semibold">{name}</span>
         </div>
-        <div className="relative max-w-md">
-          <p className="text-3xl leading-tight font-semibold -tracking-[0.02em] text-shell-ink">
+        <div className="max-w-md">
+          <p className="text-3xl leading-tight font-semibold -tracking-[0.02em]">
             Presupuestos claros, firmados desde el móvil.
           </p>
-          <p className="pt-3 text-sm leading-6 text-shell-muted">
+          <p className="pt-3 text-sm leading-6 opacity-70">
             Tarifarios, presupuestos, firma del cliente y proyectos en un solo sitio.
           </p>
         </div>

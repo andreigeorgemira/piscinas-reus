@@ -78,7 +78,7 @@ export function GroupCard({
     */
     <section
       aria-labelledby={headingId}
-      className={`overflow-hidden rounded-xl border bg-surface ${
+      className={`overflow-x-auto rounded-xl border bg-surface ${
         section.lineCount > 0 ? 'border-line shadow-card' : 'border-line-soft'
       }`}
     >
@@ -141,7 +141,7 @@ export function GroupCard({
 
       {open ? (
         <>
-          <table className="w-full table-fixed border-collapse text-sm">
+          <table className="w-full min-w-[46rem] table-fixed border-collapse text-sm">
             <colgroup>
               <col className="w-11" />
               <col className="w-20" />

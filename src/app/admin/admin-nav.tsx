@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { Tooltip } from '@/components/ui/tooltip'
 
-type NavItem = { href: string; label: string; icon: ReactNode }
+export type NavItem = { href: string; label: string; icon: ReactNode }
 
 /**
  * One list, drawn in two places: the daily work under a single "Gestión"
@@ -16,7 +16,7 @@ type NavItem = { href: string; label: string; icon: ReactNode }
  * The order is the order of the work: a client comes in, a quote is written
  * for them, and the tarifario is what the quote is written from.
  */
-const ITEMS: NavItem[] = [
+export const ITEMS: NavItem[] = [
   {
     href: '/admin',
     label: 'Panel',
@@ -70,7 +70,7 @@ const ITEMS: NavItem[] = [
  * exact match for the dashboard root and a segment-boundary match below it -
  * `startsWith` alone would also match a future `/admin/price-book-archive`.
  */
-function isCurrent(pathname: string, href: string): boolean {
+export function isCurrent(pathname: string, href: string): boolean {
   if (href === '/admin') return pathname === '/admin'
   return pathname === href || pathname.startsWith(`${href}/`)
 }

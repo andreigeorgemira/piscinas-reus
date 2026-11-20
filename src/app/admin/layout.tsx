@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { cookies } from 'next/headers'
 import { AdminProviders } from '@/components/ui/providers'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { MobileNav, MobileTopBar } from './mobile-nav'
 import { Sidebar } from './sidebar'
 import { SIDEBAR_COOKIE } from './sidebar-cookie'
 import type { AdminUser } from './user-menu'
@@ -45,9 +46,14 @@ export default async function AdminLayout({ children }: LayoutProps<'/admin'>) {
 
   return (
     <AdminProviders>
-      <div className="flex h-screen overflow-hidden bg-canvas text-ink">
+      <div className="flex h-dvh overflow-hidden bg-canvas text-ink">
         <Sidebar defaultCollapsed={collapsed} user={adminUser} tradeName={tradeName} />
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
+        {/* pb-14 on phones: the bottom navigation must not cover the last row. */}
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden pb-14 md:pb-0">
+          <MobileTopBar tradeName={tradeName} user={adminUser} />
+          {children}
+        </main>
+        <MobileNav />
       </div>
     </AdminProviders>
   )

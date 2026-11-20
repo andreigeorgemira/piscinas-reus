@@ -37,7 +37,7 @@ export function Sidebar({
 
   return (
     <aside
-      className={`relative flex shrink-0 flex-col bg-shell text-shell-muted transition-[width] duration-150 ${
+      className={`relative hidden shrink-0 flex-col border-r border-shell-line bg-shell text-shell-muted transition-[width] duration-150 md:flex ${
         collapsed ? 'w-16' : 'w-60'
       }`}
     >

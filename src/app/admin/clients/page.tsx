@@ -72,7 +72,7 @@ export default async function ClientsPage({ searchParams }: PageProps<'/admin/cl
         <NewClientButton />
       </PageHeader>
 
-      <div className="min-h-0 flex-1 p-6">
+      <div className="min-h-0 flex-1 p-4 md:p-6">
         <DataTable
           columns={COLUMNS}
           toolbar={

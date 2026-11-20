@@ -123,7 +123,7 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
         <NewQuoteButton clients={clients} defaultVatRate={settings.defaultVatRate} />
       </PageHeader>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 p-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 md:p-6">
         <StatusTabs
           current={query.status as QuoteStatus | ''}
           counts={counts}

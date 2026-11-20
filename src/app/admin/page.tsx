@@ -164,7 +164,7 @@ export default async function AdminHomePage() {
       </PageHeader>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-6">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 md:p-6">
           <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <li>
               <Kpi

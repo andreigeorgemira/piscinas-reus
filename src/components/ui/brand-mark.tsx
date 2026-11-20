@@ -6,12 +6,25 @@ const SIZES = {
   lg: 'size-10 rounded-xl text-sm',
 } as const
 
-/** The company's initials on the accent tile (see .brand-mark in globals.css). */
-export function BrandMark({ name, size = 'md' }: { name: string; size?: keyof typeof SIZES }) {
+/**
+ * The company's initials on the primary colour (see .brand-mark in globals.css).
+ * `inverse` swaps the two, for a mark that sits on a primary-coloured panel.
+ */
+export function BrandMark({
+  name,
+  size = 'md',
+  inverse = false,
+}: {
+  name: string
+  size?: keyof typeof SIZES
+  inverse?: boolean
+}) {
   return (
     <span
       aria-hidden="true"
-      className={`brand-mark flex shrink-0 items-center justify-center font-semibold tracking-[0.02em] text-white ${SIZES[size]}`}
+      className={`flex shrink-0 items-center justify-center font-semibold tracking-[0.02em] ${
+        inverse ? 'bg-primary-ink text-primary' : 'brand-mark'
+      } ${SIZES[size]}`}
     >
       {initialsOf(name)}
     </span>

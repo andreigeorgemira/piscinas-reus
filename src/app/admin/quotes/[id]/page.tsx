@@ -197,7 +197,7 @@ export default async function QuoteEditorPage({
         </Link>
       </PageHeader>
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-6 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2.5 md:px-6">
 
         {/* A GET form, so the filter is in the address: linkable, and working
             before any JavaScript has loaded. */}
@@ -237,7 +237,7 @@ export default async function QuoteEditorPage({
 
         {/* The three ways of looking at the quote, first: they decide what the
             rest of the bar does. */}
-        <div className="order-first flex rounded-lg bg-surface-sunk p-0.5" role="group" aria-label="Vista">
+        <div className="order-first flex max-w-full overflow-x-auto rounded-lg bg-surface-sunk p-0.5" role="group" aria-label="Vista">
           {(
             [
               { label: 'Todo el tarifario', to: { chosen: false, presentation: false }, on: !query.chosen && !query.presentation },
@@ -249,7 +249,7 @@ export default async function QuoteEditorPage({
               key={tab.label}
               href={href(tab.to)}
               aria-current={tab.on ? 'true' : undefined}
-              className={`flex h-8 items-center rounded-md px-3 text-xs font-medium transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+              className={`flex h-8 shrink-0 items-center rounded-md px-3 text-xs font-medium whitespace-nowrap transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
                 tab.on ? 'bg-surface text-ink shadow-card ring-1 ring-line' : 'text-muted hover:text-ink'
               }`}
             >
@@ -363,7 +363,7 @@ export default async function QuoteEditorPage({
         </p>
       ) : null}
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto px-6 py-4">
+      <div className="relative min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-6">
         {catalogue.capped ? (
           <p className="mb-3 rounded-lg border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn">
             Este tarifario tiene {catalogue.conceptCount} conceptos y la pantalla muestra los
