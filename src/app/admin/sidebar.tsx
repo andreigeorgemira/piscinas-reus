@@ -77,7 +77,7 @@ export function Sidebar({
           collapsed ? 'justify-center px-0' : 'gap-3 px-4'
         }`}
       >
-        <BrandMark name={tradeName} />
+        <BrandMark name={tradeName} tone="shell" />
         {collapsed ? null : (
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-base font-semibold -tracking-[0.01em] text-shell-ink">

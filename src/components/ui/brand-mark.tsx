@@ -7,24 +7,30 @@ const SIZES = {
 } as const
 
 /**
- * The company's initials on the primary colour (see .brand-mark in globals.css).
- * `inverse` swaps the two, for a mark that sits on a primary-coloured panel.
+ * The company's initials on the primary colour (see .brand-mark in globals.css),
+ * or turned to read on whatever it sits on.
  */
+const TONES = {
+  default: 'brand-mark',
+  /** On a primary-coloured panel. */
+  inverse: 'bg-primary-ink text-primary',
+  /** On the sidebar, whatever colour it is in the current theme. */
+  shell: 'bg-shell-ink text-shell',
+} as const
+
 export function BrandMark({
   name,
   size = 'md',
-  inverse = false,
+  tone = 'default',
 }: {
   name: string
   size?: keyof typeof SIZES
-  inverse?: boolean
+  tone?: keyof typeof TONES
 }) {
   return (
     <span
       aria-hidden="true"
-      className={`flex shrink-0 items-center justify-center font-semibold tracking-[0.02em] ${
-        inverse ? 'bg-primary-ink text-primary' : 'brand-mark'
-      } ${SIZES[size]}`}
+      className={`flex shrink-0 items-center justify-center font-semibold tracking-[0.02em] ${TONES[tone]} ${SIZES[size]}`}
     >
       {initialsOf(name)}
     </span>

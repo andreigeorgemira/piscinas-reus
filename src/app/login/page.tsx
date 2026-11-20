@@ -33,7 +33,7 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
         className="hidden bg-primary text-primary-ink lg:flex lg:flex-col lg:justify-between lg:p-12"
       >
         <div className="flex items-center gap-3">
-          <BrandMark name={name} size="lg" inverse />
+          <BrandMark name={name} size="lg" tone="inverse" />
           <span className="text-base font-semibold">{name}</span>
         </div>
         <div className="max-w-md">

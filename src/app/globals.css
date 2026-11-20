@@ -3,8 +3,8 @@
 /*
  * Direction A ("Taller"), chosen 2026-09-11: a dense, neutral tool. Since
  * 2026-11-21, white and dark navy and nothing else: white surfaces with hairline
- * borders, navy for the actions that move work forward and for what is
- * selected, and colour kept for meaning only (the four quote statuses, success,
+ * borders, a navy sidebar, navy for the actions that move work forward and for
+ * what is selected, and colour kept for meaning only (the four quote statuses, success,
  * warning, danger). In dark mode the same idea inverted: near-black surfaces,
  * white actions. Nothing in it belongs to a trade -- the company's identity
  * comes from its settings (name and initials).
@@ -30,13 +30,13 @@
   --ink-soft: #2b3445;
   --muted: #5f6b7d;
   --faint: #98a2b3;
-  --shell: #ffffff;
-  --shell-line: #e6e8ec;
-  --shell-active: #f1f3f7;
-  --shell-ink: #0b1324;
-  --shell-muted: #5f6b7d;
-  --shell-faint: #98a2b3;
-  --shell-accent: #0f1e3d;
+  --shell: #0f1e3d;
+  --shell-line: #1d2d4f;
+  --shell-active: #1d3160;
+  --shell-ink: #ffffff;
+  --shell-muted: #b3bfd4;
+  --shell-faint: #7384a3;
+  --shell-accent: #ffffff;
   --accent: #1d3a72;
   --accent-soft: #eef2f9;
   --accent-ink: #ffffff;
@@ -65,12 +65,12 @@
     --ink-soft: #d0d6e0;
     --muted: #9aa4b5;
     --faint: #677285;
-    --shell: #0b0e14;
-    --shell-line: #1c2230;
-    --shell-active: #171d29;
+    --shell: #0c1426;
+    --shell-line: #18233a;
+    --shell-active: #1a2744;
     --shell-ink: #f3f5f9;
-    --shell-muted: #9aa4b5;
-    --shell-faint: #5d6779;
+    --shell-muted: #9aa8c0;
+    --shell-faint: #5d6b85;
     --shell-accent: #f3f5f9;
     --accent: #a9c1ff;
     --accent-soft: #18213a;
@@ -100,12 +100,12 @@
   --ink-soft: #d0d6e0;
   --muted: #9aa4b5;
   --faint: #677285;
-  --shell: #0b0e14;
-  --shell-line: #1c2230;
-  --shell-active: #171d29;
+  --shell: #0c1426;
+  --shell-line: #18233a;
+  --shell-active: #1a2744;
   --shell-ink: #f3f5f9;
-  --shell-muted: #9aa4b5;
-  --shell-faint: #5d6779;
+  --shell-muted: #9aa8c0;
+  --shell-faint: #5d6b85;
   --shell-accent: #f3f5f9;
   --accent: #a9c1ff;
   --accent-soft: #18213a;
