@@ -16,15 +16,18 @@ export const metadata: Metadata = { title: 'Cliente' }
 
 /** The quotes of one client: the reference column already says whose they are. */
 const COLUMNS: TableColumn[] = [
-  { key: 'reference', label: 'Referencia' },
-  { key: 'client', label: 'Cliente', width: 'w-36' },
-  { key: 'status', label: 'Estado', width: 'w-36' },
-  { key: 'lines', label: 'Líneas', width: 'w-20', align: 'right' },
-  { key: 'created', label: 'Creado', width: 'w-28' },
-  { key: 'valid', label: 'Válido hasta', width: 'w-32' },
+  // Fixed widths for the figures, the remainder for the client's name: the one
+  // column that can lose letters without losing meaning. The reference gets a
+  // width of its own -- left to the remainder it shrank to nothing at 1280px.
+  { key: 'reference', label: 'Referencia', width: 'w-40' },
+  { key: 'client', label: 'Cliente' },
+  { key: 'status', label: 'Estado', width: 'w-32' },
+  { key: 'lines', label: 'Líneas', width: 'w-16', align: 'right' },
+  { key: 'created', label: 'Creado', width: 'w-24' },
+  { key: 'valid', label: 'Válido hasta', width: 'w-28' },
   { key: 'total', label: 'Total sin IVA', width: 'w-32', align: 'right' },
   { key: 'margin', label: 'Margen', width: 'w-28', align: 'right' },
-  { key: 'actions', label: 'Acciones', width: 'w-24', srOnly: true },
+  { key: 'actions', label: 'Acciones', width: 'w-16', srOnly: true },
 ]
 
 /** How many of a client's quotes the page shows before sending you to the list. */
@@ -140,7 +143,7 @@ export default async function ClientPage({ params }: PageProps<'/admin/clients/[
           aria-label="Ficha del cliente"
           className="flex w-[21rem] shrink-0 flex-col gap-4 overflow-y-auto"
         >
-          <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 shadow-card">
+          <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4 shadow-card">
             <h2 className="text-sm font-semibold">Ficha</h2>
 
             <Row label="Correo">

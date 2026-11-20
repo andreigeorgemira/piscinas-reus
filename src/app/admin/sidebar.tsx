@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { BrandMark } from '@/components/ui/brand-mark'
 import { Tooltip } from '@/components/ui/tooltip'
 import { AdminNav } from './admin-nav'
 import { SIDEBAR_COOKIE } from './sidebar-cookie'
@@ -19,9 +20,12 @@ import { UserMenu, type AdminUser } from './user-menu'
 export function Sidebar({
   defaultCollapsed,
   user,
+  tradeName,
 }: {
   defaultCollapsed: boolean
   user: AdminUser
+  /** The company's name from Ajustes: the sidebar is its panel, not the app's. */
+  tradeName: string
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
 
@@ -33,7 +37,7 @@ export function Sidebar({
 
   return (
     <aside
-      className={`relative flex shrink-0 flex-col bg-shell text-shell-muted transition-[width] duration-150 ${
+      className={`relative hidden shrink-0 flex-col border-r border-shell-line bg-shell text-shell-muted transition-[width] duration-150 md:flex ${
         collapsed ? 'w-16' : 'w-60'
       }`}
     >
@@ -49,7 +53,7 @@ export function Sidebar({
           onClick={toggle}
           aria-label={collapsed ? 'Expandir menú' : 'Contraer menú'}
           aria-expanded={!collapsed}
-          className="absolute top-[18px] -right-2.5 z-20 flex size-5 items-center justify-center rounded-full border border-line bg-surface text-muted shadow-card transition-colors hover:border-faint hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          className="absolute top-[22px] -right-2.5 z-20 flex size-5 items-center justify-center rounded-full border border-line bg-surface text-muted shadow-card transition-colors hover:border-faint hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           <svg
             width="11"
@@ -69,34 +73,17 @@ export function Sidebar({
       </Tooltip>
 
       <div
-        className={`flex h-14 shrink-0 items-center border-b border-shell-line ${
-          collapsed ? 'justify-center px-0' : 'gap-2.5 px-4'
+        className={`flex h-16 shrink-0 items-center border-b border-shell-line ${
+          collapsed ? 'justify-center px-0' : 'gap-3 px-4'
         }`}
       >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-shell-active">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M2.5 13.8c1.1 0 1.1 1.1 2.2 1.1s1.1-1.1 2.2-1.1 1.1 1.1 2.2 1.1 1.1-1.1 2.2-1.1 1.1 1.1 2.2 1.1 1.1-1.1 2.2-1.1" />
-            <path d="M6 12.2V5.6a1.6 1.6 0 0 1 3.2 0" />
-            <path d="M13.4 12.2V4.8" />
-            <path d="M13.4 8.6H9.2" />
-          </svg>
-        </span>
+        <BrandMark name={tradeName} tone="shell" />
         {collapsed ? null : (
           <span className="flex min-w-0 flex-col">
-            <span className="truncate text-sm font-semibold -tracking-[0.01em] text-shell-ink">
-              Piscinas Reus
+            <span className="truncate text-base font-semibold -tracking-[0.01em] text-shell-ink">
+              {tradeName}
             </span>
-            <span className="text-2xs text-shell-faint">Panel interno</span>
+            <span className="text-2xs text-shell-faint">Panel de gestión</span>
           </span>
         )}
       </div>

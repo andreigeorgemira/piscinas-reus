@@ -5,18 +5,18 @@ import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { Tooltip } from '@/components/ui/tooltip'
 
-type NavItem = { href: string; label: string; icon: ReactNode }
+export type NavItem = { href: string; label: string; icon: ReactNode }
 
 /**
- * No sections. Four entries do not need headings over them, and the app is
- * meant to stay small enough that they never will: the day Proyectos lands it
- * joins this flat list. Only routes that exist are here -- a sidebar that
- * offers a dead link teaches staff to distrust the whole thing.
+ * One list, drawn in two places: the daily work under a single "Gestión"
+ * heading, and Ajustes on its own at the foot (see AdminNav). The day
+ * Proyectos lands it joins the work. Only routes that exist are here -- a
+ * sidebar that offers a dead link teaches staff to distrust the whole thing.
  *
  * The order is the order of the work: a client comes in, a quote is written
  * for them, and the tarifario is what the quote is written from.
  */
-const ITEMS: NavItem[] = [
+export const ITEMS: NavItem[] = [
   {
     href: '/admin',
     label: 'Panel',
@@ -70,59 +70,85 @@ const ITEMS: NavItem[] = [
  * exact match for the dashboard root and a segment-boundary match below it -
  * `startsWith` alone would also match a future `/admin/price-book-archive`.
  */
-function isCurrent(pathname: string, href: string): boolean {
+export function isCurrent(pathname: string, href: string): boolean {
   if (href === '/admin') return pathname === '/admin'
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
+function NavLink({ item, collapsed, current }: { item: NavItem; collapsed: boolean; current: boolean }) {
+  const link = (
+    <Link
+      href={item.href}
+      aria-current={current ? 'page' : undefined}
+      className={`relative flex h-10 items-center gap-3 rounded-lg text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-shell-accent ${
+        collapsed ? 'justify-center px-0' : 'px-3'
+      } ${
+        current
+          ? 'bg-shell-active font-medium text-shell-ink before:absolute before:top-2 before:bottom-2 before:-left-2 before:w-[3px] before:rounded-r-full before:bg-shell-accent'
+          : 'text-shell-muted hover:bg-shell-active/60 hover:text-shell-ink'
+      }`}
+    >
+      <svg
+        width="17"
+        height="17"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke={current ? 'var(--shell-accent)' : 'currentColor'}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="shrink-0"
+        aria-hidden="true"
+      >
+        {item.icon}
+      </svg>
+      {collapsed ? <span className="sr-only">{item.label}</span> : item.label}
+    </Link>
+  )
+
+  // Collapsed, the label is the tooltip's whole job: there is nothing on
+  // screen but an icon. Expanded, a tooltip repeating the visible word would
+  // be noise.
+  return collapsed ? (
+    <Tooltip label={item.label} side="right">
+      {link}
+    </Tooltip>
+  ) : (
+    link
+  )
+}
+
+/**
+ * The work on top, the settings at the foot: the screens staff live in are the
+ * first thing in the column, and the one they visit once a year waits by the
+ * account menu where configuration is usually looked for.
+ */
 export function AdminNav({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname()
+  const main = ITEMS.filter((item) => item.href !== '/admin/settings')
+  const footer = ITEMS.filter((item) => item.href === '/admin/settings')
 
   return (
-    <nav className="flex flex-col gap-0.5 overflow-y-auto px-2 py-2">
-      {ITEMS.map((item) => {
-        const current = isCurrent(pathname, item.href)
-        const link = (
-          <Link
-            href={item.href}
-            aria-current={current ? 'page' : undefined}
-            className={`flex h-9 items-center gap-2.5 rounded-md text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-              collapsed ? 'justify-center px-0' : 'px-2.5'
-            } ${
-              current
-                ? 'bg-shell-active font-medium text-shell-ink'
-                : 'text-shell-muted hover:bg-shell-active/60 hover:text-shell-ink'
-            }`}
-          >
-            <svg
-              width="17"
-              height="17"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke={current ? 'var(--accent)' : 'currentColor'}
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="shrink-0"
-              aria-hidden="true"
-            >
-              {item.icon}
-            </svg>
-            {collapsed ? <span className="sr-only">{item.label}</span> : item.label}
-          </Link>
-        )
-
-        // Collapsed, the label is the tooltip's whole job: there is nothing
-        // on screen but an icon. Expanded, a tooltip repeating the visible
-        // word would be noise.
-        return collapsed ? (
-          <Tooltip key={item.href} label={item.label} side="right">
-            {link}
-          </Tooltip>
-        ) : (
-          <div key={item.href}>{link}</div>
-        )
-      })}
+    <nav aria-label="Principal" className="flex min-h-0 flex-1 flex-col px-2 py-3">
+      {collapsed ? null : (
+        <span className="px-3 pb-1.5 text-2xs font-medium tracking-[0.08em] text-shell-faint uppercase">
+          Gestión
+        </span>
+      )}
+      <ul className="flex flex-col gap-0.5">
+        {main.map((item) => (
+          <li key={item.href}>
+            <NavLink item={item} collapsed={collapsed} current={isCurrent(pathname, item.href)} />
+          </li>
+        ))}
+      </ul>
+      <ul className="mt-auto flex flex-col gap-0.5 pt-3">
+        {footer.map((item) => (
+          <li key={item.href}>
+            <NavLink item={item} collapsed={collapsed} current={isCurrent(pathname, item.href)} />
+          </li>
+        ))}
+      </ul>
     </nav>
   )
 }

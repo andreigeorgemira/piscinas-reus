@@ -27,7 +27,7 @@ export function QuoteTotalsBar({ totals, summary }: { totals: Totals; summary: s
     // is not a landmark, and this bar is what staff (and the tests) look for.
     <section
       aria-label="Totales del presupuesto"
-      className="flex h-16 shrink-0 items-center gap-6 border-t border-line bg-surface px-6"
+      className="flex h-16 shrink-0 items-center gap-6 overflow-x-auto border-t border-line bg-surface px-4 md:px-6 [&>*]:shrink-0"
     >
       {/* What the bar is counting, at the end the numbers leave free. */}
       <span className="num mr-auto text-xs text-muted">{summary}</span>

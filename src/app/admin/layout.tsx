@@ -1,15 +1,18 @@
+import type { Metadata } from 'next'
 import { cookies } from 'next/headers'
 import { AdminProviders } from '@/components/ui/providers'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { MobileNav, MobileTopBar } from './mobile-nav'
 import { Sidebar } from './sidebar'
 import { SIDEBAR_COOKIE } from './sidebar-cookie'
 import type { AdminUser } from './user-menu'
+import { readTradeName } from '@/lib/settings/brand'
 
 /**
  * The frame every admin screen renders inside: a sidebar on the left, the
  * page's own header and content on the right.
  *
- * The brand block and the page header are both h-14 and both carry a bottom
+ * The brand block and the page header are both h-16 and both carry a bottom
  * border, so the two rules meet across the seam and the screen reads as one
  * bar rather than two that nearly line up.
  *
@@ -39,13 +42,29 @@ export default async function AdminLayout({ children }: LayoutProps<'/admin'>) {
   }
 
   const collapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === 'collapsed'
+  const tradeName = (await readTradeName(supabase)) ?? 'Mi empresa'
 
   return (
     <AdminProviders>
-      <div className="flex h-screen overflow-hidden bg-canvas text-ink">
-        <Sidebar defaultCollapsed={collapsed} user={adminUser} />
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
+      <div className="flex h-dvh overflow-hidden bg-canvas text-ink">
+        <Sidebar defaultCollapsed={collapsed} user={adminUser} tradeName={tradeName} />
+        {/* pb-14 on phones: the bottom navigation must not cover the last row. */}
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden pb-14 md:pb-0">
+          <MobileTopBar tradeName={tradeName} user={adminUser} />
+          {children}
+        </main>
+        <MobileNav />
       </div>
     </AdminProviders>
   )
+}
+
+/**
+ * Every admin tab says whose panel it is, with the company's own name: "Tarifas
+ * · Reformas Ruiz" rather than the name of whoever installed the app.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const supabase = await createServerSupabaseClient()
+  const tradeName = (await readTradeName(supabase)) ?? 'Panel'
+  return { title: { default: tradeName, template: `%s · ${tradeName}` } }
 }

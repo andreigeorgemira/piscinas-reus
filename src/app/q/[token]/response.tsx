@@ -171,7 +171,7 @@ export function QuoteResponse({
         <button
           type="submit"
           disabled={accepting}
-          className="flex h-11 items-center justify-center rounded-lg border border-ink bg-ink px-5 text-sm font-semibold text-canvas transition-colors hover:bg-ink-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
+          className="flex h-11 items-center justify-center rounded-lg border border-primary bg-primary px-5 text-sm font-semibold text-primary-ink transition-colors hover:border-primary-hover hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
         >
           {accepting ? 'Firmando…' : 'Acepto el presupuesto'}
         </button>

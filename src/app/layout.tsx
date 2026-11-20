@@ -16,12 +16,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   // Every page sets its own title; the template is what turns "Tarifario"
   // into a browser tab a staff member with six tabs open can tell apart.
+  // The company's own name is added by the layouts that can read it (the admin
+  // panel); here, with nothing read yet, the title stays the page's own.
   title: {
-    default: "Piscinas Reus",
-    template: "%s · Piscinas Reus",
+    default: "Presupuestos",
+    template: "%s",
   },
-  description:
-    "Construcción y mantenimiento de piscinas en Reus y el Baix Camp.",
+  description: "Tarifarios, presupuestos y firma del cliente.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

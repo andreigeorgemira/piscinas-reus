@@ -145,30 +145,30 @@ export function SettingsForm({ settings }: { settings: CompanySettings }) {
         title="Empresa"
         description="Lo que encabeza cada presupuesto: en el PDF, en el enlace del cliente y en el correo."
       >
-        {field('trade_name', 'Nombre comercial', { required: true, maxLength: 120, placeholder: 'Piscinas Reus' })}
-        {field('tagline', 'Actividad', { maxLength: 200, placeholder: 'Construcción y mantenimiento de piscinas' })}
+        {field('trade_name', 'Nombre comercial', { required: true, maxLength: 120, placeholder: 'Mi Empresa' })}
+        {field('tagline', 'Actividad', { maxLength: 200, placeholder: 'Reformas y mantenimiento' })}
       </Section>
 
       <Section
         title="Datos fiscales"
         description="Razón social y NIF/CIF del emisor. Salen bajo el nombre comercial en el PDF y en la página del cliente."
       >
-        {field('legal_name', 'Razón social', { maxLength: 200, placeholder: 'Piscinas Reus S.L.' })}
+        {field('legal_name', 'Razón social', { maxLength: 200, placeholder: 'Mi Empresa S.L.' })}
         {field('tax_id', 'NIF / CIF', {
           maxLength: 20,
           placeholder: 'B43123456',
           hint: 'Nueve letras y cifras. Los espacios y guiones se quitan solos.',
         })}
-        {field('address', 'Dirección', { maxLength: 200, placeholder: 'Carrer Major 1', wide: true })}
+        {field('address', 'Dirección', { maxLength: 200, placeholder: 'Calle Mayor 1', wide: true })}
         {field('postal_code', 'Código postal', { maxLength: 5, inputMode: 'numeric', placeholder: '43201' })}
-        {field('city', 'Localidad', { maxLength: 120, placeholder: 'Reus' })}
-        {field('province', 'Provincia', { maxLength: 120, placeholder: 'Tarragona' })}
+        {field('city', 'Localidad', { maxLength: 120, placeholder: 'Localidad' })}
+        {field('province', 'Provincia', { maxLength: 120, placeholder: 'Provincia' })}
       </Section>
 
       <Section title="Contacto" description="Para que el cliente sepa a quién llamar o escribir.">
         {field('phone', 'Teléfono', { maxLength: 40, inputMode: 'tel', placeholder: '977 00 00 00' })}
-        {field('email', 'Correo', { maxLength: 200, inputMode: 'email', placeholder: 'hola@piscinasreus.es' })}
-        {field('website', 'Web', { maxLength: 200, inputMode: 'url', placeholder: 'piscinasreus.es', wide: true })}
+        {field('email', 'Correo', { maxLength: 200, inputMode: 'email', placeholder: 'hola@miempresa.es' })}
+        {field('website', 'Web', { maxLength: 200, inputMode: 'url', placeholder: 'miempresa.es', wide: true })}
       </Section>
 
       <Section
@@ -220,7 +220,7 @@ export function SettingsForm({ settings }: { settings: CompanySettings }) {
         <button
           type="submit"
           disabled={pending}
-          className="ml-auto flex h-9 items-center rounded-md border border-ink bg-ink px-4 text-sm font-medium text-canvas hover:bg-ink-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
+          className="ml-auto flex h-9 items-center rounded-md border border-primary bg-primary px-4 text-sm font-medium text-primary-ink hover:border-primary-hover hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
         >
           {pending ? 'Guardando…' : 'Guardar ajustes'}
         </button>

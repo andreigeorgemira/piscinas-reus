@@ -159,12 +159,12 @@ export function ActionBar({
   return (
     <div className="flex flex-col gap-2 border-b border-line bg-surface px-3 py-2.5">
       <div className="flex flex-wrap items-center gap-2">
-        <form id={formId} action={action} className="flex items-center">
+        <form id={formId} action={action} className="flex min-w-0 flex-1 items-center sm:flex-none">
           {Object.entries(hidden ?? {}).map(([name, value]) => (
             <input key={name} type="hidden" name={name} value={value} />
           ))}
 
-          <div className="group/search flex h-9 w-96 max-w-full items-center gap-2 rounded-lg border border-line bg-canvas px-3 transition-colors focus-within:border-accent focus-within:bg-surface focus-within:ring-2 focus-within:ring-[var(--accent-soft)]">
+          <div className="group/search flex h-9 w-full items-center gap-2 sm:w-96 rounded-lg border border-line bg-canvas px-3 transition-colors focus-within:border-accent focus-within:bg-surface focus-within:ring-2 focus-within:ring-[var(--accent-soft)]">
             {searching ? (
               <svg
                 width="15"
@@ -296,7 +296,7 @@ export function ActionBar({
                 <button
                   type="submit"
                   form={formId}
-                  className="flex h-8 items-center justify-center rounded-md border border-ink bg-ink text-xs font-medium text-canvas hover:bg-ink-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  className="flex h-8 items-center justify-center rounded-md border border-primary bg-primary text-xs font-medium text-primary-ink hover:border-primary-hover hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   Aplicar filtros
                 </button>

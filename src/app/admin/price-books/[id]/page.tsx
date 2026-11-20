@@ -221,7 +221,7 @@ export default async function PriceBookDetailPage({
         </Link>
       </PageHeader>
 
-      <ItemDragArea className="min-h-0 flex-1 p-5">
+      <ItemDragArea className="min-h-0 flex-1 p-4 md:p-6">
         <GroupsOpenProvider>
           <DataTable
             columns={PRICE_BOOK_COLUMNS}

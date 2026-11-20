@@ -68,9 +68,11 @@ export default async function ClientsPage({ searchParams }: PageProps<'/admin/cl
             ? `${listing.total} ${listing.total === 1 ? 'resultado' : 'resultados'}`
             : `${listing.total} ${listing.total === 1 ? 'cliente' : 'clientes'}`
         }
-      />
+      >
+        <NewClientButton />
+      </PageHeader>
 
-      <div className="min-h-0 flex-1 p-5">
+      <div className="min-h-0 flex-1 p-4 md:p-6">
         <DataTable
           columns={COLUMNS}
           toolbar={
@@ -80,9 +82,7 @@ export default async function ClientsPage({ searchParams }: PageProps<'/admin/cl
               searchLabel="Buscar clientes"
               searchPlaceholder="Buscar nombre, correo, teléfono o localidad"
               hidden={query.size === PAGE_SIZES[1] ? undefined : { size: String(query.size) }}
-            >
-              <NewClientButton />
-            </ActionBar>
+            />
           }
           empty={
             listing.clients.length === 0 ? (
