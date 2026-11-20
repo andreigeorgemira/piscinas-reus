@@ -220,6 +220,23 @@ describe('itemInputSchema', () => {
     }
   })
 
+  it('calls an empty cost box missing, not malformed', () => {
+    const result = itemInputSchema.safeParse({
+      groupId: null,
+      code: null,
+      name: 'Vaso de gresite',
+      description: null,
+      unit: 'unit',
+      unitCost: '   ',
+      unitPrice: '10',
+      isActive: true,
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(firstIssue(result.error)).toBe('El coste es obligatorio.')
+    }
+  })
+
   it('rejects a unit outside the enum', () => {
     const result = itemInputSchema.safeParse({
       groupId: null,

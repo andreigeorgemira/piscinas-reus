@@ -40,6 +40,13 @@ export function moneyField(label: string) {
   return z
     .string({ error: `El ${label} es obligatorio.` })
     .transform((raw, ctx) => {
+      // An empty box is a missing figure, not a malformed one: saying "no es un
+      // número válido" about a box nobody typed in sends people looking for a
+      // typo that is not there.
+      if (raw.trim() === '') {
+        ctx.addIssue({ code: 'custom', message: `El ${label} es obligatorio.` })
+        return z.NEVER
+      }
       const parsed = parseDecimal(raw)
       if (parsed === null) {
         ctx.addIssue({ code: 'custom', message: `El ${label} no es un número válido.` })
