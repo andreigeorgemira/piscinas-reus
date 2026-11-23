@@ -149,10 +149,10 @@ async function loginAsClient(page: Page) {
 test('keeps a client out of the clients and quotes screens', async ({ page }) => {
   await loginAsClient(page)
 
-  await page.goto('/admin/clients')
+  await page.goto('/admin/clients?vista=tabla')
   await expect(page).toHaveURL(/\/portal/)
 
-  await page.goto('/admin/quotes')
+  await page.goto('/admin/quotes?vista=tabla')
   await expect(page).toHaveURL(/\/portal/)
 })
 
@@ -161,7 +161,7 @@ test('builds a quote by ticking the catalogue, sends it, accepts it and reopens 
 
   // From the client's own page, which is where a quote actually starts: staff
   // look the client up and open the next quote from there.
-  await page.goto('/admin/clients')
+  await page.goto('/admin/clients?vista=tabla')
   await page.getByLabel('Buscar clientes').fill(clientName)
   // The search box navigates on its own a beat after the typing stops
   // (src/components/ui/action-bar.tsx). Waiting for the query in the URL is
@@ -254,7 +254,7 @@ test('builds a quote by ticking the catalogue, sends it, accepts it and reopens 
 
   // Every status move happens from the list now: the badge is the control, and
   // the editor is left for writing the quote.
-  await page.goto('/admin/quotes')
+  await page.goto('/admin/quotes?vista=tabla')
   const row = page.getByRole('row').filter({ hasText: reference })
   await row.getByRole('button', { name: `Cambiar el estado de ${reference}` }).click()
   await page.getByRole('button', { name: 'Marcar como enviado' }).click()
@@ -272,7 +272,7 @@ test('builds a quote by ticking the catalogue, sends it, accepts it and reopens 
 
   // Accepting creates the project, which is what makes a quote work rather than
   // paperwork. The dialog says so before it happens.
-  await page.goto('/admin/quotes')
+  await page.goto('/admin/quotes?vista=tabla')
   await row.getByRole('button', { name: `Cambiar el estado de ${reference}` }).click()
   await page.getByRole('button', { name: 'Marcar como aceptado' }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: 'Marcar como aceptado' }).click()
@@ -293,7 +293,7 @@ test('builds a quote by ticking the catalogue, sends it, accepts it and reopens 
 
 test('copies a quote from the list, lines included', async ({ page }) => {
   await loginAsStaff(page)
-  await page.goto(`/admin/quotes?q=${encodeURIComponent(quoteTitle)}`)
+  await page.goto(`/admin/quotes?q=${encodeURIComponent(quoteTitle)}&vista=tabla`)
 
   const row = page.getByRole('row').filter({ hasText: quoteTitle })
   const reference = (await row.getByRole('link').first().textContent())!.trim()
@@ -318,7 +318,7 @@ test('keeps what was typed when the form is refused, and creates the client from
   page,
 }) => {
   await loginAsStaff(page)
-  await page.goto('/admin/quotes')
+  await page.goto('/admin/quotes?vista=tabla')
   await page.getByRole('button', { name: 'Nuevo presupuesto' }).click()
 
   // A title of spaces passes the browser's own `required` and is refused by the
@@ -361,7 +361,7 @@ test('keeps what was typed when the form is refused, and creates the client from
 
 test('writes a quote with no client, and refuses to accept it until it has one', async ({ page }) => {
   await loginAsStaff(page)
-  await page.goto('/admin/quotes')
+  await page.goto('/admin/quotes?vista=tabla')
 
   await page.getByRole('button', { name: 'Nuevo presupuesto' }).click()
   await page.getByLabel('Título *').fill(looseQuoteTitle)
@@ -372,7 +372,7 @@ test('writes a quote with no client, and refuses to accept it until it has one',
 
   const reference = (await page.getByRole('heading', { level: 1 }).textContent())!.trim()
 
-  await page.goto('/admin/quotes')
+  await page.goto('/admin/quotes?vista=tabla')
   const row = page.getByRole('row').filter({ hasText: looseQuoteTitle })
   await expect(row).toContainText('Sin cliente')
 
@@ -398,7 +398,7 @@ test('lists the quote under its client and filters by status', async ({ page }) 
   // Straight to the filtered address rather than typing into the box: the
   // search itself is a GET form whose behaviour the price-book spec already
   // pins, and what this test is about is what the row says.
-  await page.goto(`/admin/quotes?q=${encodeURIComponent(clientName)}`)
+  await page.goto(`/admin/quotes?q=${encodeURIComponent(clientName)}&vista=tabla`)
 
   // Not the copy the duplicate test leaves behind, whose title contains this
   // one's.
@@ -412,7 +412,7 @@ test('lists the quote under its client and filters by status', async ({ page }) 
   await expect(row).toContainText('100,00')
 
   // The status filter, which is how staff find what is out of the office.
-  await page.goto('/admin/quotes?status=sent')
+  await page.goto('/admin/quotes?status=sent&vista=tabla')
   await expect(
     page.getByRole('row').filter({ hasText: quoteTitle }).filter({ hasNotText: '(copia)' }),
   ).toBeHidden()

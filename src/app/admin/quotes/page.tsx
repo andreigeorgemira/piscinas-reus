@@ -12,6 +12,9 @@ import { QUOTE_STATUS_LABELS, QUOTE_STATUSES, type QuoteStatus } from '@/lib/quo
 import { NewQuoteButton } from './new-quote-dialog'
 import { countQuotesByStatus, StatusTabs } from './status-tabs'
 import { QuoteRow } from './quote-row'
+import { CardCollection } from '@/components/ui/card-collection'
+import { readListView, ViewToggle } from '@/components/ui/view-toggle'
+import { QuoteCards } from './quote-cards'
 
 export const metadata: Metadata = { title: 'Presupuestos' }
 
@@ -54,6 +57,8 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
     client: firstValue(search.client),
     size: PAGE_SIZES.includes(requestedSize) ? requestedSize : PAGE_SIZES[1]!,
     page: Number.isFinite(requestedPage) && requestedPage > 1 ? requestedPage : 1,
+    // Cards unless the table was asked for (?vista=tabla).
+    view: readListView(search.vista),
   }
 
   const base = '/admin/quotes'
@@ -67,6 +72,7 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
     if (next.client) params.set('client', next.client)
     if (next.size !== PAGE_SIZES[1]) params.set('size', String(next.size))
     if (next.page > 1) params.set('page', String(next.page))
+    if (next.view === 'table') params.set('vista', 'tabla')
     const queryString = params.toString()
     return queryString ? `${base}?${queryString}` : base
   }
@@ -110,34 +116,15 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
     ) : null,
   ].filter(Boolean)
 
-  return (
-    <>
-      <PageHeader
-        title="Presupuestos"
-        meta={
-          filtering
-            ? `${listing.total} ${listing.total === 1 ? 'resultado' : 'resultados'}`
-            : `${listing.total} ${listing.total === 1 ? 'presupuesto' : 'presupuestos'}`
-        }
-      >
-        <NewQuoteButton clients={clients} defaultVatRate={settings.defaultVatRate} />
-      </PageHeader>
-
-      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 md:p-6">
-        <StatusTabs
-          current={query.status as QuoteStatus | ''}
-          counts={counts}
-          hrefFor={(status) => href({ status, page: 1 })}
-        />
-        <DataTable
-          columns={COLUMNS}
-          toolbar={
-            <ActionBar
+  const toolbar = (<ActionBar
               action={base}
               searchValue={query.q}
               searchLabel="Buscar presupuestos"
               searchPlaceholder="Buscar referencia, título o cliente"
-              hidden={query.size === PAGE_SIZES[1] ? undefined : { size: String(query.size) }}
+              hidden={{
+        ...(query.size === PAGE_SIZES[1] ? {} : { size: String(query.size) }),
+        ...(query.view === 'table' ? { vista: 'tabla' } : {}),
+      }}
               filterCount={filterCount}
               onClearFilters={href({ status: '', client: '', page: 1 })}
               chips={chips.length > 0 ? chips : undefined}
@@ -179,9 +166,9 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
                 </div>
               }
             />
-          }
-          empty={
-            listing.quotes.length === 0 ? (
+  )
+
+  const empty = listing.quotes.length === 0 ? (
               <TableEmpty
                 message={
                   filtering
@@ -212,9 +199,8 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
                 ) : null}
               </TableEmpty>
             ) : undefined
-          }
-          footer={
-            <Paginator
+
+  const footer = (<Paginator
               page={listing.page}
               pageCount={listing.pageCount}
               pageSize={listing.pageSize}
@@ -227,14 +213,44 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
               }}
               sizeHrefs={PAGE_SIZES.map((size) => ({ size, href: href({ size, page: 1 }) }))}
             />
-          }
-        >
-          <tbody>
-            {listing.quotes.map((quote) => (
-              <QuoteRow key={quote.id} quote={quote} />
-            ))}
-          </tbody>
-        </DataTable>
+  )
+
+  return (
+    <>
+      <PageHeader
+        title="Presupuestos"
+        meta={
+          filtering
+            ? `${listing.total} ${listing.total === 1 ? 'resultado' : 'resultados'}`
+            : `${listing.total} ${listing.total === 1 ? 'presupuesto' : 'presupuestos'}`
+        }
+      >
+        <NewQuoteButton clients={clients} defaultVatRate={settings.defaultVatRate} />
+      </PageHeader>
+
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 md:p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusTabs
+            current={query.status as QuoteStatus | ''}
+            counts={counts}
+            hrefFor={(status) => href({ status, page: 1 })}
+          />
+          <span className="ml-auto" />
+          <ViewToggle current={query.view} hrefs={{ cards: href({ view: 'cards' }), table: href({ view: 'table' }) }} />
+        </div>
+        {query.view === 'cards' ? (
+          <CardCollection toolbar={toolbar} empty={empty} footer={footer}>
+            <QuoteCards quotes={listing.quotes} />
+          </CardCollection>
+        ) : (
+          <DataTable columns={COLUMNS} toolbar={toolbar} empty={empty} footer={footer}>
+            <tbody>
+              {listing.quotes.map((quote) => (
+                <QuoteRow key={quote.id} quote={quote} />
+              ))}
+            </tbody>
+          </DataTable>
+        )}
       </div>
     </>
   )

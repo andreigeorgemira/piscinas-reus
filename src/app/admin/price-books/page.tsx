@@ -5,6 +5,9 @@ import { requireAdmin } from '@/lib/auth/require-admin'
 import { listPriceBooks } from '@/lib/price-book/queries'
 import { NewPriceBookForm } from './new-price-book-form'
 import { PriceBookRow } from './price-book-row'
+import { PriceBookCards } from './price-book-cards'
+import { CardCollection } from '@/components/ui/card-collection'
+import { readListView, ViewToggle } from '@/components/ui/view-toggle'
 import { plural } from '@/lib/plural'
 
 export const metadata: Metadata = { title: 'Tarifarios' }
@@ -22,7 +25,8 @@ const COLUMNS: TableColumn[] = [
   { key: 'actions', label: 'Acciones', width: 'w-24', srOnly: true },
 ]
 
-export default async function PriceBooksPage() {
+export default async function PriceBooksPage({ searchParams }: PageProps<'/admin/price-books'>) {
+  const view = readListView((await searchParams).vista)
   const supabase = await requireAdmin()
   const books = await listPriceBooks(supabase)
 
@@ -35,24 +39,35 @@ export default async function PriceBooksPage() {
         meta={
           `${plural(books.length, 'tarifario', 'tarifarios')} · ${plural(totalItems, 'concepto', 'conceptos')}`
         }
-      />
+      >
+        <ViewToggle current={view} hrefs={{ cards: '/admin/price-books', table: '/admin/price-books?vista=tabla' }} />
+      </PageHeader>
 
       <div className="min-h-0 flex-1 p-4 md:p-6">
-        <DataTable
-          columns={COLUMNS}
-          empty={
-            books.length === 0 ? (
-              <TableEmpty message="Todavía no hay ningún tarifario. Crea el primero." />
-            ) : undefined
-          }
-          footer={<NewPriceBookForm />}
-        >
-          <tbody>
-            {books.map((book) => (
-              <PriceBookRow key={book.id} book={book} />
-            ))}
-          </tbody>
-        </DataTable>
+        {view === 'cards' ? (
+          <CardCollection
+            empty={books.length === 0 ? <TableEmpty message="Todavía no hay ningún tarifario. Crea el primero." /> : undefined}
+            footer={<NewPriceBookForm />}
+          >
+            <PriceBookCards books={books} />
+          </CardCollection>
+        ) : (
+          <DataTable
+            columns={COLUMNS}
+            empty={
+              books.length === 0 ? (
+                <TableEmpty message="Todavía no hay ningún tarifario. Crea el primero." />
+              ) : undefined
+            }
+            footer={<NewPriceBookForm />}
+          >
+            <tbody>
+              {books.map((book) => (
+                <PriceBookRow key={book.id} book={book} />
+              ))}
+            </tbody>
+          </DataTable>
+        )}
       </div>
     </>
   )
