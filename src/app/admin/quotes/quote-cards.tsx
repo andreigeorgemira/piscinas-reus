@@ -56,7 +56,7 @@ const PRIMARY = `${BUTTON} border-primary bg-primary text-primary-ink hover:bord
  * pencil (and the preview's main button) open the editor.
  */
 /** How many groups the little document on a card lists before "+ N más". */
-const SHOWN_GROUPS = 4
+const SHOWN_GROUPS = 3
 
 /**
  * The quote's contents as a tiny sheet of paper: its groups with their
@@ -68,8 +68,8 @@ function MiniDocument({ summary }: { summary: QuoteCardSummary | undefined }) {
   const hidden = groups.length - SHOWN_GROUPS
 
   return (
-    <div className="rounded-lg bg-surface-sunk p-2">
-      <div className="flex min-h-[7.5rem] flex-col rounded-md border border-line bg-surface px-3 pt-2.5 pb-2 shadow-card">
+    <div className="h-40 bg-surface-sunk px-5 pt-5">
+      <div className="flex h-full flex-col rounded-t-md border border-b-0 border-line bg-surface px-3.5 pt-3 pb-2.5 shadow-card transition-transform duration-200 group-hover:-translate-y-0.5">
         <div aria-hidden="true" className="mb-2 h-0.5 w-8 rounded-full bg-ink/80" />
         {groups.length === 0 ? (
           <div className="flex flex-1 flex-col gap-1.5" aria-label="Sin líneas todavía">
@@ -136,48 +136,52 @@ export function QuoteCards({
     <>
       {quotes.map((quote) => (
         <li key={quote.id}>
-          <article className="group relative flex h-full flex-col gap-3 rounded-xl border border-line bg-surface p-4 shadow-card transition-[border-color,box-shadow] hover:border-faint/70 hover:shadow-pop">
-            <div className="flex items-center gap-2">
-              <span className="num truncate text-xs font-semibold text-muted">{quote.reference}</span>
-              <StatusBadge status={quote.status} />
+          <article className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-card transition-[border-color,box-shadow] hover:border-faint/70 hover:shadow-pop">
+            {/* The quote itself first, like the cover of a document. */}
+            <div className="relative">
+              <MiniDocument summary={summaries[quote.id]} />
               <Tooltip label={quote.status === 'draft' ? 'Editar' : 'Abrir'}>
                 <Link
                   href={`/admin/quotes/${quote.id}`}
                   aria-label={`${quote.status === 'draft' ? 'Editar' : 'Abrir'} ${quote.reference}`}
-                  className="relative z-10 ml-auto flex size-8 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+                  className="absolute top-2.5 right-2.5 z-10 flex size-8 items-center justify-center rounded-lg border border-line bg-surface/95 text-muted shadow-card transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
                 >
                   <PencilIcon />
                 </Link>
               </Tooltip>
             </div>
 
-            <div className="flex min-w-0 flex-col gap-1">
-              <h3 className="line-clamp-2 text-sm font-semibold text-ink">{quote.title}</h3>
-              <p className="flex items-center gap-1.5 truncate text-xs text-muted">
-                <svg {...ICON} width={12} height={12}>
-                  <circle cx="8" cy="5.4" r="2.6" />
-                  <path d="M2.8 13.6c.6-2.4 2.7-3.8 5.2-3.8s4.6 1.4 5.2 3.8" />
-                </svg>
-                <span className="truncate">{quote.clientName ?? 'Sin cliente'}</span>
-              </p>
-            </div>
-
-            <MiniDocument summary={summaries[quote.id]} />
-
-            <div className="mt-auto flex items-end justify-between gap-3 border-t border-line-soft pt-3">
-              <div className="flex flex-col">
-                <span className="num text-xl font-semibold -tracking-[0.02em] text-ink">
-                  {formatEuros(payable(quote.totals))}
-                </span>
-                <span className="text-2xs text-faint">
-                  {quote.totals.vatRate === null ? 'sin IVA' : `con IVA ${formatVatRate(quote.totals.vatRate)}`}
-                </span>
+            <div className="flex flex-1 flex-col gap-3 border-t border-line p-4">
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="line-clamp-2 text-sm leading-snug font-semibold text-ink">{quote.title}</h3>
+                  <StatusBadge status={quote.status} className="shrink-0" />
+                </div>
+                <p className="flex items-center gap-1.5 truncate text-xs text-muted">
+                  <svg {...ICON} width={12} height={12}>
+                    <circle cx="8" cy="5.4" r="2.6" />
+                    <path d="M2.8 13.6c.6-2.4 2.7-3.8 5.2-3.8s4.6 1.4 5.2 3.8" />
+                  </svg>
+                  <span className="truncate">{quote.clientName ?? 'Sin cliente'}</span>
+                </p>
               </div>
-              <div className="flex flex-col items-end text-2xs text-muted">
-                <span>{plural(quote.lineCount, 'línea', 'líneas')}</span>
-                <span className="num">
-                  {quote.validUntil ? `Válido hasta ${date(quote.validUntil)}` : `Creado ${date(quote.createdAt)}`}
-                </span>
+
+              <div className="mt-auto flex items-end justify-between gap-3">
+                <div className="flex flex-col">
+                  <span className="num text-xl font-semibold -tracking-[0.02em] text-ink">
+                    {formatEuros(payable(quote.totals))}
+                  </span>
+                  <span className="text-2xs text-faint">
+                    {quote.totals.vatRate === null ? 'sin IVA' : `con IVA ${formatVatRate(quote.totals.vatRate)}`}
+                  </span>
+                </div>
+                <div className="flex flex-col items-end text-2xs text-muted">
+                  <span className="num">
+                    {quote.validUntil ? `Hasta ${date(quote.validUntil)}` : date(quote.createdAt)}
+                  </span>
+                  {/* The reference is for filing, not for reading: small, at the foot. */}
+                  <span className="num text-[10px] text-faint">{quote.reference}</span>
+                </div>
               </div>
             </div>
 
