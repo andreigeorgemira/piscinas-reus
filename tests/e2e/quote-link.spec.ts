@@ -202,7 +202,7 @@ test('a client reads the quote, picks an extra and signs it', async ({ page }) =
 
   // And the office sees it: accepted, with the project the acceptance created.
   await loginAsStaff(page)
-  await page.goto(`/admin/quotes?q=${encodeURIComponent(sentTitle)}`)
+  await page.goto(`/admin/quotes?q=${encodeURIComponent(sentTitle)}&vista=tabla`)
   const row = page.getByRole('row').filter({ hasText: sentTitle })
   await expect(row).toContainText('Aceptado')
   await expect(row).toContainText(/P-\d{4}-\d{4}/)
@@ -224,7 +224,7 @@ test('a client says no, with a reason the office can read', async ({ page }) => 
 
   // The office reads the reason on the quote itself, not only as a status.
   await loginAsStaff(page)
-  await page.goto(`/admin/quotes?q=${encodeURIComponent(rejectTitle)}`)
+  await page.goto(`/admin/quotes?q=${encodeURIComponent(rejectTitle)}&vista=tabla`)
   await page.getByRole('link', { name: `Q-NO-${runId}` }).click()
   await expect(page.getByText(/El cliente lo rechazó/)).toBeVisible()
   await expect(page.getByText(/Nos hemos decidido por otra empresa/)).toBeVisible()
@@ -232,7 +232,7 @@ test('a client says no, with a reason the office can read', async ({ page }) => 
 
 test('sending from the office marks the quote sent and opens its link', async ({ page }) => {
   await loginAsStaff(page)
-  await page.goto(`/admin/quotes?q=${encodeURIComponent(toSendTitle)}`)
+  await page.goto(`/admin/quotes?q=${encodeURIComponent(toSendTitle)}&vista=tabla`)
 
   const row = page.getByRole('row').filter({ hasText: toSendTitle })
   await expect(row).toContainText('Borrador')

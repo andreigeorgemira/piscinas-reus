@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { UnitType } from '@/lib/price-book/schema'
 import { escapeFilterTerm } from '@/lib/supabase/filters'
-import type { GroupDisplay, GroupSetting } from './presentation'
+import { roundMoney } from '@/lib/money'
+import { documentSections, presentationOrder, UNGROUPED_LABEL, type GroupDisplay, type GroupSetting } from './presentation'
+import { lineTotal } from './totals'
 import type { QuoteStatus } from './status'
 
 /** How many quotes one screen holds. */
@@ -506,4 +508,70 @@ export async function getQuote(
     items: row.quote_items.map(toItem),
     totals: totals.get(id) ?? ZERO_TOTALS,
   }
+}
+
+/** What a quote card draws as its little document: the groups and their subtotals. */
+export type QuoteCardSummary = {
+  groups: { name: string; subtotal: number; lineCount: number }[]
+  extrasCount: number
+}
+
+/**
+ * The contents of a page of quotes, summarised for their cards: each quote's
+ * groups in the order its document prints them, with their subtotals.
+ *
+ * Two reads for the whole page (lines and group settings), not one per card.
+ * Staff-only like everything here: RLS answers nothing to anybody else.
+ */
+export async function listQuoteCardSummaries(
+  supabase: SupabaseClient,
+  quoteIds: string[],
+): Promise<Record<string, QuoteCardSummary>> {
+  if (quoteIds.length === 0) return {}
+
+  const [lines, settings] = await Promise.all([
+    supabase
+      .from('quote_items')
+      .select('quote_id, group_name, quantity, unit_price, discount_pct, is_recommended, position, created_at')
+      .in('quote_id', quoteIds),
+    supabase.from('quote_groups').select('quote_id, name, position, display').in('quote_id', quoteIds),
+  ])
+  if (lines.error) throw lines.error
+  if (settings.error) throw settings.error
+
+  type Line = {
+    quote_id: string
+    group_name: string | null
+    quantity: number
+    unit_price: number
+    discount_pct: number
+    is_recommended: boolean
+    position: number
+    created_at: string
+  }
+
+  const summaries: Record<string, QuoteCardSummary> = {}
+  for (const id of quoteIds) {
+    const own = (lines.data as Line[])
+      .filter((line) => line.quote_id === id)
+      .sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
+      .map((line) => ({
+        groupName: line.group_name,
+        isRecommended: line.is_recommended,
+        total: lineTotal({ quantity: Number(line.quantity), unitPrice: Number(line.unit_price), discountPct: Number(line.discount_pct) }),
+      }))
+    const groupSettings = (settings.data as (GroupSetting & { quote_id: string })[]).filter(
+      (setting) => setting.quote_id === id,
+    )
+
+    summaries[id] = {
+      groups: documentSections(presentationOrder(own, groupSettings), groupSettings).map((section) => ({
+        name: section.groupName ?? UNGROUPED_LABEL,
+        subtotal: roundMoney(section.lines.reduce((sum, line) => sum + line.total, 0)),
+        lineCount: section.lines.length,
+      })),
+      extrasCount: own.filter((line) => line.isRecommended).length,
+    }
+  }
+  return summaries
 }

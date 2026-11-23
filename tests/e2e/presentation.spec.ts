@@ -137,3 +137,19 @@ test('arranges the groups and hides prices all the way to the client’s page', 
 
   await visitor.close()
 })
+
+test('opens a quote from its card, through a preview of what it holds', async ({ page }) => {
+  await loginAsStaff(page)
+  // Cards are the list's default view.
+  await page.goto(`/admin/quotes?q=${encodeURIComponent(reference)}`)
+
+  await page.getByRole('button', { name: `Vista previa de ${reference}, ${title}` }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('heading', { name: title })).toBeVisible()
+  // The groups and the totals, read when the preview opens.
+  await expect(dialog).toContainText('Obra civil')
+  await expect(dialog).toContainText('3.509,00')
+
+  await dialog.getByRole('link', { name: /^(Editar|Abrir) presupuesto$/ }).click()
+  await expect(page).toHaveURL(new RegExp(`/admin/quotes/${quoteId}`))
+})

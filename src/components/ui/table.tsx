@@ -48,7 +48,7 @@ export function DataTable({
      * a flex child's default min-height is its content, so without it the
      * card grows to fit every row and the scrollbar lands on the page.
      */
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-card">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-card">
       {toolbar}
       {/*
         `relative` for the same reason the quote editor's scroll area carries it:
@@ -57,8 +57,9 @@ export function DataTable({
         containing block here they are laid out against the document and make the
         page scroll as tall as the table.
       */}
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <table className="w-full table-fixed border-collapse text-sm">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-auto">
+        {/* Below 48rem the table keeps its columns readable and scrolls sideways instead of crushing them. */}
+        <table className="w-full min-w-[48rem] table-fixed border-collapse text-sm">
           <colgroup>
             {columns.map((column) => (
               <col key={column.key} className={column.width} />

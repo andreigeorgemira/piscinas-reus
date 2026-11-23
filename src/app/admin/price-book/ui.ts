@@ -13,12 +13,12 @@ const BUTTON_BASE =
 
 export const BUTTON_CLASS = `${BUTTON_BASE} h-7 border-line bg-surface px-2.5 text-ink-soft hover:bg-surface-hover`
 
-export const PRIMARY_BUTTON_CLASS = `${BUTTON_BASE} h-7 border-ink bg-ink px-2.5 text-canvas hover:border-ink-soft hover:bg-ink-soft`
+export const PRIMARY_BUTTON_CLASS = `${BUTTON_BASE} h-7 border-primary bg-primary px-2.5 text-primary-ink hover:border-primary-hover hover:bg-primary-hover`
 
 /** The page header sits taller than the table, so its controls do too. */
-export const HEADER_BUTTON_CLASS = `${BUTTON_BASE} h-8 border-line bg-surface px-3 text-ink-soft hover:bg-surface-hover`
+export const HEADER_BUTTON_CLASS = `${BUTTON_BASE} h-9 rounded-lg border-line bg-surface px-3 text-ink-soft hover:bg-surface-hover`
 
-export const HEADER_PRIMARY_BUTTON_CLASS = `${BUTTON_BASE} h-8 border-ink bg-ink px-3 text-canvas hover:border-ink-soft hover:bg-ink-soft`
+export const HEADER_PRIMARY_BUTTON_CLASS = `${BUTTON_BASE} h-9 rounded-lg border-primary bg-primary px-3.5 text-primary-ink shadow-card hover:border-primary-hover hover:bg-primary-hover`
 
 /** A square button carrying only an icon. Its name lives on aria-label. */
 export const ICON_BUTTON_CLASS =

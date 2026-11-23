@@ -1,7 +1,13 @@
 @import "tailwindcss";
 
 /*
- * Direction A ("Taller"), chosen 2026-09-11: a dense, neutral tool.
+ * Direction A ("Taller"), chosen 2026-09-11: a dense, neutral tool. Since
+ * 2026-11-21, white and dark navy and nothing else: white surfaces with hairline
+ * borders, a navy sidebar, navy for the actions that move work forward and for
+ * what is selected, and colour kept for meaning only (the four quote statuses, success,
+ * warning, danger). In dark mode the same idea inverted: near-black surfaces,
+ * white actions. Nothing in it belongs to a trade -- the company's identity
+ * comes from its settings (name and initials).
  *
  * THREE theme states, not two. `:root` carries light. The media query picks
  * dark up for anyone whose system says so, but only while they have not
@@ -14,111 +20,107 @@
  * will drift the first time the palette moves.
  */
 :root {
-  --canvas: #f6f7f9;
+  --canvas: #fbfbfc;
   --surface: #ffffff;
-  --surface-sunk: #f1f3f5;
-  --surface-hover: #f6f7f9;
-  --line: #e3e6ea;
-  --line-soft: #eef0f3;
-
-  --ink: #16181d;
-  --ink-soft: #3d424b;
-  --muted: #6b7280;
-  --faint: #9aa1ab;
-
-  /* The sidebar is dark in both themes: it is the frame, not the page. */
-  --shell: #14161a;
-  --shell-line: #24272e;
-  --shell-active: #24272e;
-  --shell-ink: #f7f8f9;
-  --shell-muted: #9aa1ab;
-  --shell-faint: #5b616b;
-
-  --accent: #2563eb;
-  --accent-soft: #eff4ff;
+  --surface-sunk: #f5f6f8;
+  --surface-hover: #f5f6f8;
+  --line: #e6e8ec;
+  --line-soft: #eff0f3;
+  --ink: #0b1324;
+  --ink-soft: #2b3445;
+  --muted: #5f6b7d;
+  --faint: #98a2b3;
+  --shell: #0f1e3d;
+  --shell-line: #1d2d4f;
+  --shell-active: #1d3160;
+  --shell-ink: #ffffff;
+  --shell-muted: #b3bfd4;
+  --shell-faint: #7384a3;
+  --shell-accent: #ffffff;
+  --accent: #1d3a72;
+  --accent-soft: #eef2f9;
   --accent-ink: #ffffff;
-
-  --danger: #b91c1c;
-  --danger-soft: #fef2f2;
+  --primary: #0f1e3d;
+  --primary-hover: #1b2d55;
+  --primary-ink: #ffffff;
+  --danger: #c0262d;
+  --danger-soft: #fdf1f1;
   --success: #15803d;
-  --success-soft: #ecfdf5;
-  --warn: #a16207;
-  --warn-soft: #fef7e6;
-
-  --shadow-card: 0 1px 2px rgb(16 18 22 / 0.06), 0 1px 1px rgb(16 18 22 / 0.04);
-  --shadow-pop: 0 8px 24px rgb(16 18 22 / 0.12), 0 2px 6px rgb(16 18 22 / 0.08);
+  --success-soft: #edf8f1;
+  --warn: #a15c07;
+  --warn-soft: #fdf5e7;
+  --shadow-card: 0 1px 2px rgb(11 19 36 / 0.04);
+  --shadow-pop: 0 12px 32px rgb(11 19 36 / 0.12), 0 2px 8px rgb(11 19 36 / 0.06);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --canvas: #0c0d10;
-    --surface: #15171b;
-    --surface-sunk: #1b1e23;
-    --surface-hover: #1b1e23;
-    --line: #262a31;
-    --line-soft: #1f2229;
-
-    --ink: #f2f4f6;
-    --ink-soft: #c9ced6;
-    --muted: #99a0aa;
-    --faint: #6d747e;
-
-    --shell: #0a0b0d;
-    --shell-line: #22252b;
-    --shell-active: #22252b;
-    --shell-ink: #f2f4f6;
-    --shell-muted: #99a0aa;
-    --shell-faint: #5b616b;
-
-    --accent: #60a5fa;
-    --accent-soft: #152034;
-    --accent-ink: #0a0b0d;
-
-    --danger: #f87171;
-    --danger-soft: #2a1416;
+    --canvas: #0b0e14;
+    --surface: #11151e;
+    --surface-sunk: #151a25;
+    --surface-hover: #171d29;
+    --line: #232a37;
+    --line-soft: #1a202c;
+    --ink: #f3f5f9;
+    --ink-soft: #d0d6e0;
+    --muted: #9aa4b5;
+    --faint: #677285;
+    --shell: #0c1426;
+    --shell-line: #18233a;
+    --shell-active: #1a2744;
+    --shell-ink: #f3f5f9;
+    --shell-muted: #9aa8c0;
+    --shell-faint: #5d6b85;
+    --shell-accent: #f3f5f9;
+    --accent: #a9c1ff;
+    --accent-soft: #18213a;
+    --accent-ink: #0b0e14;
+    --primary: #f3f5f9;
+    --primary-hover: #d8dee8;
+    --primary-ink: #0b1324;
+    --danger: #f2787d;
+    --danger-soft: #2b1418;
     --success: #4ade80;
     --success-soft: #10231a;
-    --warn: #fbbf24;
-    --warn-soft: #2a2211;
-
+    --warn: #f2bd4b;
+    --warn-soft: #2b2112;
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.4);
+    --shadow-pop: 0 12px 32px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.4);
   }
 }
 
 :root[data-theme="dark"] {
-  --canvas: #0c0d10;
-  --surface: #15171b;
-  --surface-sunk: #1b1e23;
-  --surface-hover: #1b1e23;
-  --line: #262a31;
-  --line-soft: #1f2229;
-
-  --ink: #f2f4f6;
-  --ink-soft: #c9ced6;
-  --muted: #99a0aa;
-  --faint: #6d747e;
-
-  --shell: #0a0b0d;
-  --shell-line: #22252b;
-  --shell-active: #22252b;
-  --shell-ink: #f2f4f6;
-  --shell-muted: #99a0aa;
-  --shell-faint: #5b616b;
-
-  --accent: #60a5fa;
-  --accent-soft: #152034;
-  --accent-ink: #0a0b0d;
-
-  --danger: #f87171;
-  --danger-soft: #2a1416;
+  --canvas: #0b0e14;
+  --surface: #11151e;
+  --surface-sunk: #151a25;
+  --surface-hover: #171d29;
+  --line: #232a37;
+  --line-soft: #1a202c;
+  --ink: #f3f5f9;
+  --ink-soft: #d0d6e0;
+  --muted: #9aa4b5;
+  --faint: #677285;
+  --shell: #0c1426;
+  --shell-line: #18233a;
+  --shell-active: #1a2744;
+  --shell-ink: #f3f5f9;
+  --shell-muted: #9aa8c0;
+  --shell-faint: #5d6b85;
+  --shell-accent: #f3f5f9;
+  --accent: #a9c1ff;
+  --accent-soft: #18213a;
+  --accent-ink: #0b0e14;
+  --primary: #f3f5f9;
+  --primary-hover: #d8dee8;
+  --primary-ink: #0b1324;
+  --danger: #f2787d;
+  --danger-soft: #2b1418;
   --success: #4ade80;
   --success-soft: #10231a;
-  --warn: #fbbf24;
-  --warn-soft: #2a2211;
-
+  --warn: #f2bd4b;
+  --warn-soft: #2b2112;
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 12px 32px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.4);
 }
 
 /*
@@ -146,10 +148,14 @@
   --color-shell-ink: var(--shell-ink);
   --color-shell-muted: var(--shell-muted);
   --color-shell-faint: var(--shell-faint);
+  --color-shell-accent: var(--shell-accent);
 
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-ink: var(--accent-ink);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-ink: var(--primary-ink);
 
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
@@ -206,7 +212,7 @@
   --text-base--line-height: 1.375rem;
   --text-lg: 0.9375rem;       /* 15px - page title */
   --text-lg--line-height: 1.375rem;
-  --text-xl: 1.125rem;        /* 18px - the sign-in screen only */
+  --text-xl: 1.125rem;        /* 18px - page titles and the sign-in screen */
   --text-xl--line-height: 1.5rem;
 }
 
@@ -229,17 +235,40 @@ html[data-theme="dark"] {
 body {
   background: var(--canvas);
   color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+/* A tactile press on every real button, quiet enough not to distract. */
+button:not(:disabled):active {
+  transform: translateY(0.5px);
 }
 
 /*
- * Money and quantities are read down a column, so they are set in the mono
- * face with tabular figures: the digits line up and a price that is an order
- * of magnitude out is visible without reading it.
+ * Money and quantities are read down a column, so they are set with tabular
+ * figures: the digits line up and a price that is an order of magnitude out is
+ * visible without reading it. The sans face, not the mono one: the mono made
+ * every screen read like a terminal, and tabular-nums is what does the work.
  */
 .num {
-  font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "zero" 1;
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+/* Codes and references, where a monospace face genuinely helps the eye. */
+.code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.92em;
   letter-spacing: -0.01em;
 }
 
@@ -292,5 +321,55 @@ html[data-dragging] table {
   --info-text: var(--accent);
   --info-border: color-mix(in oklab, var(--accent) 35%, transparent);
 
+  --border-radius: 10px;
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
+
+[data-sonner-toaster] [data-sonner-toast] {
+  box-shadow: var(--shadow-pop);
+}
+
+/*
+ * Dialogs, menus and popovers arrive instead of appearing: a short fade with a
+ * hint of scale, from the side they open on. `scale` rather than `transform`,
+ * because Tailwind 4 positions the dialogs with the separate `translate`
+ * property and the two must not overwrite each other. Leaving is instant, as
+ * Radix unmounts closed content.
+ */
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes surface-in {
+  from {
+    opacity: 0;
+    scale: 0.97;
+  }
+}
+
+[role="dialog"][data-state="open"],
+[role="alertdialog"][data-state="open"],
+[data-radix-popper-content-wrapper] > [data-state="open"] {
+  animation: surface-in 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [role="dialog"][data-state="open"],
+  [role="alertdialog"][data-state="open"],
+  [data-radix-popper-content-wrapper] > [data-state="open"] {
+    animation: none;
+  }
+
+  button:not(:disabled):active {
+    transform: none;
+  }
+}
+
+/* The company mark: its initials on the primary colour, inverted in dark mode. */
+.brand-mark {
+  background-color: var(--primary);
+  color: var(--primary-ink);
+}
+

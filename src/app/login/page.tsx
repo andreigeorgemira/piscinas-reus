@@ -1,36 +1,63 @@
 import type { Metadata } from 'next'
 import { safeNextPath } from '@/lib/safe-next-path'
+import { BrandMark } from '@/components/ui/brand-mark'
+import { readTradeName } from '@/lib/settings/brand'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { LoginForm } from './login-form'
 
 export const metadata: Metadata = { title: 'Acceso' }
 
+/**
+ * The company's name for the sign-in screen, read with the service role: the
+ * visitor has no session yet and company_settings is staff-only. One column of
+ * one row, never a secret -- it is printed on every quote.
+ */
+async function tradeName(): Promise<string | null> {
+  try {
+    return await readTradeName(createAdminSupabaseClient())
+  } catch {
+    return null
+  }
+}
+
 export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
   const { next } = await searchParams
+  const name = (await tradeName()) ?? 'Panel de gestión'
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-canvas p-6">
-      <div className="flex w-full max-w-sm flex-col gap-6 rounded-[7px] border border-line bg-surface p-6">
-        <div className="flex items-center gap-2.5">
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M2.5 14c1.1 0 1.1 1.1 2.2 1.1S5.8 14 6.9 14s1.1 1.1 2.2 1.1S10.2 14 11.3 14s1.1 1.1 2.2 1.1S14.6 14 15.7 14s1.1 1.1 1.8 1.1" />
-            <path d="M6 12.4V5.6a1.6 1.6 0 0 1 3.2 0" />
-            <path d="M13.4 12.4V4.8" />
-            <path d="M13.4 8.6H9.2" />
-          </svg>
-          <h1 className="text-xl font-semibold -tracking-[0.01em]">Acceso</h1>
+    <main className="grid min-h-screen bg-canvas lg:grid-cols-[1.05fr_1fr]">
+      {/* The company half. Decorative only -- everything a screen reader needs
+          is in the form beside it. */}
+      <section
+        aria-hidden="true"
+        className="hidden bg-primary text-primary-ink lg:flex lg:flex-col lg:justify-between lg:p-12"
+      >
+        <div className="flex items-center gap-3">
+          <BrandMark name={name} size="lg" tone="inverse" />
+          <span className="text-base font-semibold">{name}</span>
         </div>
-        <LoginForm nextPath={safeNextPath(next)} />
-      </div>
+        <div className="max-w-md">
+          <p className="text-3xl leading-tight font-semibold -tracking-[0.02em]">
+            Presupuestos claros, firmados desde el móvil.
+          </p>
+          <p className="pt-3 text-sm leading-6 opacity-70">
+            Tarifarios, presupuestos, firma del cliente y proyectos en un solo sitio.
+          </p>
+        </div>
+      </section>
+
+      <section className="flex items-center justify-center p-6">
+        <div className="flex w-full max-w-sm flex-col gap-7">
+          <div className="flex flex-col gap-1.5">
+            <span className="lg:hidden">
+              <BrandMark name={name} size="lg" />
+            </span>
+            <h1 className="pt-2 text-2xl font-semibold -tracking-[0.02em]">Acceso</h1>
+            <p className="text-sm text-muted">Entra con tu correo y contraseña.</p>
+          </div>
+          <LoginForm nextPath={safeNextPath(next)} />
+        </div>
+      </section>
     </main>
   )
 }

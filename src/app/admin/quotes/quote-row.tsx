@@ -41,7 +41,7 @@ export function QuoteRow({ quote }: { quote: QuoteListRow }) {
         <div className="flex min-w-0 flex-col">
           <Link
             href={`/admin/quotes/${quote.id}`}
-            className="num w-fit font-medium outline-none group-hover/row:text-accent after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-accent"
+            className="num w-fit max-w-full truncate font-semibold outline-none group-hover/row:text-accent after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-accent"
           >
             {quote.reference}
           </Link>

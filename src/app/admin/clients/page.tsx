@@ -8,6 +8,10 @@ import { requireAdmin } from '@/lib/auth/require-admin'
 import { listClients } from '@/lib/clients/queries'
 import { ClientRow } from './client-row'
 import { NewClientButton } from './client-dialog'
+import { CardCollection } from '@/components/ui/card-collection'
+import { readListView, ViewToggle } from '@/components/ui/view-toggle'
+import { getCompanySettings } from '@/lib/settings/queries'
+import { ClientCards } from './client-cards'
 
 export const metadata: Metadata = { title: 'Clientes' }
 
@@ -35,6 +39,8 @@ export default async function ClientsPage({ searchParams }: PageProps<'/admin/cl
     q: firstValue(search.q).trim(),
     size: PAGE_SIZES.includes(requestedSize) ? requestedSize : PAGE_SIZES[1]!,
     page: Number.isFinite(requestedPage) && requestedPage > 1 ? requestedPage : 1,
+    // Cards unless the table was asked for (?vista=tabla).
+    view: readListView(search.vista),
   }
 
   const base = '/admin/clients'
@@ -46,46 +52,36 @@ export default async function ClientsPage({ searchParams }: PageProps<'/admin/cl
     if (next.q) params.set('q', next.q)
     if (next.size !== PAGE_SIZES[1]) params.set('size', String(next.size))
     if (next.page > 1) params.set('page', String(next.page))
+    if (next.view === 'table') params.set('vista', 'tabla')
     const queryString = params.toString()
     return queryString ? `${base}?${queryString}` : base
   }
 
   const supabase = await requireAdmin()
-  const listing = await listClients(supabase, {
-    search: query.q,
-    page: query.page,
-    pageSize: query.size,
-  })
+  const [listing, settings] = await Promise.all([
+    listClients(supabase, {
+      search: query.q,
+      page: query.page,
+      pageSize: query.size,
+    }),
+    getCompanySettings(supabase),
+  ])
 
   const searching = query.q !== ''
 
-  return (
-    <>
-      <PageHeader
-        title="Clientes"
-        meta={
-          searching
-            ? `${listing.total} ${listing.total === 1 ? 'resultado' : 'resultados'}`
-            : `${listing.total} ${listing.total === 1 ? 'cliente' : 'clientes'}`
-        }
-      />
-
-      <div className="min-h-0 flex-1 p-5">
-        <DataTable
-          columns={COLUMNS}
-          toolbar={
-            <ActionBar
+  const toolbar = (<ActionBar
               action={base}
               searchValue={query.q}
               searchLabel="Buscar clientes"
               searchPlaceholder="Buscar nombre, correo, teléfono o localidad"
-              hidden={query.size === PAGE_SIZES[1] ? undefined : { size: String(query.size) }}
-            >
-              <NewClientButton />
-            </ActionBar>
-          }
-          empty={
-            listing.clients.length === 0 ? (
+              hidden={{
+                ...(query.size === PAGE_SIZES[1] ? {} : { size: String(query.size) }),
+                ...(query.view === 'table' ? { vista: 'tabla' } : {}),
+              }}
+            />
+  )
+
+  const empty = listing.clients.length === 0 ? (
               <TableEmpty
                 message={
                   searching
@@ -116,9 +112,8 @@ export default async function ClientsPage({ searchParams }: PageProps<'/admin/cl
                 ) : null}
               </TableEmpty>
             ) : undefined
-          }
-          footer={
-            <Paginator
+
+  const footer = (<Paginator
               page={listing.page}
               pageCount={listing.pageCount}
               pageSize={listing.pageSize}
@@ -131,14 +126,38 @@ export default async function ClientsPage({ searchParams }: PageProps<'/admin/cl
               }}
               sizeHrefs={PAGE_SIZES.map((size) => ({ size, href: href({ size, page: 1 }) }))}
             />
-          }
-        >
-          <tbody>
-            {listing.clients.map((client) => (
-              <ClientRow key={client.id} client={client} />
-            ))}
-          </tbody>
-        </DataTable>
+  )
+
+  return (
+    <>
+      <PageHeader
+        title="Clientes"
+        meta={
+          searching
+            ? `${listing.total} ${listing.total === 1 ? 'resultado' : 'resultados'}`
+            : `${listing.total} ${listing.total === 1 ? 'cliente' : 'clientes'}`
+        }
+      >
+        <ViewToggle current={query.view} hrefs={{ cards: href({ view: 'cards' }), table: href({ view: 'table' }) }} />
+        <NewClientButton />
+      </PageHeader>
+
+      <div className="min-h-0 flex-1 p-4 md:p-6">
+        <div className="flex h-full min-h-0 flex-col">
+          {query.view === 'cards' ? (
+            <CardCollection toolbar={toolbar} empty={empty} footer={footer}>
+              <ClientCards clients={listing.clients} defaultVatRate={settings.defaultVatRate} />
+            </CardCollection>
+          ) : (
+            <DataTable columns={COLUMNS} toolbar={toolbar} empty={empty} footer={footer}>
+              <tbody>
+                {listing.clients.map((client) => (
+                  <ClientRow key={client.id} client={client} />
+                ))}
+              </tbody>
+            </DataTable>
+          )}
+        </div>
       </div>
     </>
   )
