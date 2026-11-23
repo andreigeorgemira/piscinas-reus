@@ -4,11 +4,12 @@ import Link from 'next/link'
 import { useState, useTransition } from 'react'
 import { PreviewDialog, PreviewSkeleton } from '@/components/ui/preview-dialog'
 import { Tooltip } from '@/components/ui/tooltip'
+import { roundMoney } from '@/lib/money'
 import { plural } from '@/lib/plural'
 import { formatEuros } from '@/lib/price-book/decimal'
 import { GROUP_DISPLAY_LABELS } from '@/lib/quotes/presentation'
 import type { QuotePreview } from '@/lib/quotes/preview'
-import type { QuoteListRow } from '@/lib/quotes/queries'
+import type { QuoteCardSummary, QuoteListRow } from '@/lib/quotes/queries'
 import { formatVatRate } from '@/lib/vat'
 import { loadQuotePreview } from './preview-actions'
 import { StatusBadge } from './status-badge'
@@ -54,7 +55,67 @@ const PRIMARY = `${BUTTON} border-primary bg-primary text-primary-ink hover:bord
  * glance. A click opens a preview with the document's groups and totals; the
  * pencil (and the preview's main button) open the editor.
  */
-export function QuoteCards({ quotes }: { quotes: QuoteListRow[] }) {
+/** How many groups the little document on a card lists before "+ N más". */
+const SHOWN_GROUPS = 4
+
+/**
+ * The quote's contents as a tiny sheet of paper: its groups with their
+ * subtotals, the way the document prints them, so a card says what was quoted
+ * and not only for how much.
+ */
+function MiniDocument({ summary }: { summary: QuoteCardSummary | undefined }) {
+  const groups = summary?.groups ?? []
+  const hidden = groups.length - SHOWN_GROUPS
+
+  return (
+    <div className="rounded-lg bg-surface-sunk p-2">
+      <div className="flex min-h-[7.5rem] flex-col rounded-md border border-line bg-surface px-3 pt-2.5 pb-2 shadow-card">
+        <div aria-hidden="true" className="mb-2 h-0.5 w-8 rounded-full bg-ink/80" />
+        {groups.length === 0 ? (
+          <div className="flex flex-1 flex-col gap-1.5" aria-label="Sin líneas todavía">
+            <div className="h-1.5 w-3/4 rounded-full bg-surface-sunk" />
+            <div className="h-1.5 w-1/2 rounded-full bg-surface-sunk" />
+            <div className="h-1.5 w-2/3 rounded-full bg-surface-sunk" />
+            <span className="mt-auto text-[10px] text-faint">Sin líneas todavía</span>
+          </div>
+        ) : (
+          <ul className="flex flex-1 flex-col">
+            {groups.slice(0, SHOWN_GROUPS).map((group) => (
+              <li key={group.name} className="flex items-baseline gap-1.5 text-[11px] leading-5">
+                <span className="max-w-[60%] truncate text-ink-soft">{group.name}</span>
+                <span aria-hidden="true" className="min-w-3 flex-1 -translate-y-[3px] border-b border-dotted border-line" />
+                <span className="num shrink-0 text-ink">{formatEuros(group.subtotal)}</span>
+              </li>
+            ))}
+            {hidden > 0 || (summary?.extrasCount ?? 0) > 0 ? (
+              <li className="flex gap-2 pt-0.5 text-[10px] text-faint">
+                {hidden > 0 ? <span>{`+ ${plural(hidden, 'grupo más', 'grupos más')}`}</span> : null}
+                {summary && summary.extrasCount > 0 ? (
+                  <span className="text-accent">{`+ ${plural(summary.extrasCount, 'extra', 'extras')}`}</span>
+                ) : null}
+              </li>
+            ) : null}
+            <li className="mt-auto flex items-baseline justify-between gap-2 border-t border-ink/70 pt-1 text-[11px] leading-5 font-semibold">
+              <span>Suma</span>
+              <span className="num">
+                {formatEuros(roundMoney(groups.reduce((sum, group) => sum + group.subtotal, 0)))}
+              </span>
+            </li>
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function QuoteCards({
+  quotes,
+  summaries,
+}: {
+  quotes: QuoteListRow[]
+  /** Each quote's groups, for the little document on its card. */
+  summaries: Record<string, QuoteCardSummary>
+}) {
   const [selected, setSelected] = useState<QuoteListRow | null>(null)
   const [preview, setPreview] = useState<QuotePreview | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -100,6 +161,8 @@ export function QuoteCards({ quotes }: { quotes: QuoteListRow[] }) {
                 <span className="truncate">{quote.clientName ?? 'Sin cliente'}</span>
               </p>
             </div>
+
+            <MiniDocument summary={summaries[quote.id]} />
 
             <div className="mt-auto flex items-end justify-between gap-3 border-t border-line-soft pt-3">
               <div className="flex flex-col">

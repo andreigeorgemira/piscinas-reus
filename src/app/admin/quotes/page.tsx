@@ -7,7 +7,7 @@ import { DataTable, TableEmpty, type TableColumn } from '@/components/ui/table'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { listClientOptions } from '@/lib/clients/queries'
 import { getCompanySettings } from '@/lib/settings/queries'
-import { listQuotes } from '@/lib/quotes/queries'
+import { listQuoteCardSummaries, listQuotes } from '@/lib/quotes/queries'
 import { QUOTE_STATUS_LABELS, QUOTE_STATUSES, type QuoteStatus } from '@/lib/quotes/status'
 import { NewQuoteButton } from './new-quote-dialog'
 import { countQuotesByStatus, StatusTabs } from './status-tabs'
@@ -91,6 +91,15 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
     getCompanySettings(supabase),
     countQuotesByStatus(supabase),
   ])
+
+  // The little document on each card: read only when cards are shown.
+  const summaries =
+    query.view === 'cards'
+      ? await listQuoteCardSummaries(
+          supabase,
+          listing.quotes.map((quote) => quote.id),
+        )
+      : {}
 
   const filterCount = (query.status ? 1 : 0) + (query.client ? 1 : 0)
   const filtering = filterCount > 0 || query.q !== ''
@@ -240,7 +249,7 @@ export default async function QuotesPage({ searchParams }: PageProps<'/admin/quo
         </div>
         {query.view === 'cards' ? (
           <CardCollection toolbar={toolbar} empty={empty} footer={footer}>
-            <QuoteCards quotes={listing.quotes} />
+            <QuoteCards quotes={listing.quotes} summaries={summaries} />
           </CardCollection>
         ) : (
           <DataTable columns={COLUMNS} toolbar={toolbar} empty={empty} footer={footer}>
